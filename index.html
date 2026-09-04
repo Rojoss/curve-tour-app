@@ -262,6 +262,8 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 
 <main>
 
+<div class="msg msg-err" id="sync-stale-banner" style="display:none">⚠ Live connection lost — what you're seeing may be out of date. Reload to try reconnecting.</div>
+
 <!-- ═══ ADMIN ═══ -->
 <div class="view active" id="view-admin">
   <div class="card" id="admin-security-panel"></div>
@@ -387,6 +389,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
       <label>Tournament Name</label>
       <input type="text" id="cfg-title-running" placeholder="Unnamed Tournament — click to name" oninput="titleChanged(this.value)">
     </div>
+    <div class="card" id="sync-status-panel"></div>
     <div id="tie-banner-wrap"></div>
     <div class="summary-bar" id="admin-summary"></div>
     <div id="admin-timeline" style="margin-bottom:18px"></div>
@@ -509,7 +512,17 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
   </div>
 </div>
 
+<!-- ═══ VIEWER-MODE LIVE SYNC STATUS (waiting / connection lost) ═══ -->
+<div class="modal-overlay" id="sync-viewer-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="sync-viewer-title"></div>
+    <div class="modal-msg" id="sync-viewer-msg"></div>
+  </div>
+</div>
 
+
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-database-compat.js"></script>
 <script src="js/core.js"></script>
 <script src="js/formats-and-primitives.js"></script>
 <script src="js/pooling-phases.js"></script>
@@ -519,13 +532,21 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <script src="js/render-admin.js"></script>
 <script src="js/render-viewer.js"></script>
 <script src="js/archive.js"></script>
+<script src="js/sync.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  INIT — restore any saved tournament from this browser
+//  INIT — restore any saved tournament from this browser, or (if this
+//  tab was opened via a shared "?t=" live link) enter read-only viewer
+//  mode instead — see js/sync.js.
 // ═══════════════════════════════════════════════════════════════
-loadState();
-renderAdminSecurityPanel();
+if (SYNC_IS_VIEWER) {
+  initViewerMode();
+} else {
+  loadState();
+  renderAdminSecurityPanel();
+  initWriterMode();
+}
 </script>
 </body>
 </html>

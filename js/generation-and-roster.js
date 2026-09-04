@@ -575,6 +575,12 @@ function proceedGenerateSchedule() {
   T.needsSave = false;
   T.autoSaved = false;
   T.tournamentId = String(Date.now());
+  // Fresh write key + shareable link for this specific generation — see
+  // js/sync.js. A new key every generation (never reused across
+  // tournaments) means an old, no-longer-updated live link can never be
+  // used to push data into a new one.
+  if (typeof generateSyncWriteKey === 'function') generateSyncWriteKey();
+  if (typeof updateSyncUrlBar === 'function') updateSyncUrlBar();
   // "Bye" odd-count strategy, Round 1 only: every later round's bye (if any)
   // is handled live in advanceRound(), but Round 1 has no prior round to
   // compute a live advancing pool from — it's seeded directly from the
@@ -614,6 +620,7 @@ function startTournament() {
   T.curRound = 0;
   T.started = true;
   renderAdminRound();
+  if (typeof renderSyncStatusPanel === 'function') renderSyncStatusPanel();
   saveState();
 }
 

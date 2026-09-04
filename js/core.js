@@ -85,6 +85,11 @@ function confirmUnsavedChanges(messageAction, buttonAction, proceed, extraCleanu
 var STORAGE_KEY = 'curveFFA_state_v1';
 
 function saveState() {
+  // Viewer-mode tabs (opened via a shared "?t=" live link) never persist to
+  // this browser's own localStorage — writing here would risk clobbering a
+  // real organiser session if the same browser is later used for Admin. See
+  // js/sync.js for the writer/viewer mode split.
+  if (typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER) return;
   try {
     var setup = {
       scheduleLogic: document.getElementById('cfg-schedule-logic').value,
@@ -109,6 +114,7 @@ function saveState() {
     var activeTab = getActiveTab('admin');
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ T, setup, activeTab }));
   } catch (e) { console.warn('Could not save tournament state', e); }
+  if (typeof pushSyncUpdate === 'function') pushSyncUpdate();
 }
 
 function loadState() {
@@ -184,6 +190,16 @@ function loadState() {
 //  single feature area below, so it gets its own small section).
 // ═══════════════════════════════════════════════════════════════
 function switchTab(id, btn) {
+  // A viewer-mode tab (opened via a shared "?t=" live link, see js/sync.js)
+  // has no Admin nav button to click, but this still guards focusTitleInput()
+  // (the header-title click) and a direct console call — any local mutation
+  // a viewer made in Admin would just be silently overwritten by the next
+  // real update from the organiser's own tab, so there's nothing there for
+  // them to usefully do.
+  if (id === 'admin' && typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER) {
+    alert('This is a read-only live view — the organiser\'s own device controls the tournament.');
+    return;
+  }
   // Every entry point into Admin (the nav button and the header-title click
   // via focusTitleInput()) routes through here, so this one guard covers
   // both — see "Admin password protection" in HANDOFF.md for why this is a
@@ -398,6 +414,14 @@ function proceedReset() {
   document.getElementById('preview-wrap').style.display = 'none';
   document.getElementById('hdr-round').textContent = '—';
   updateTitleDisplay();
+  // The old tournament's write key/shareable link must not linger — a stale
+  // key pointing at a now-reset tournamentId is meaningless, and a stale "?t="
+  // in the address bar would otherwise still point viewers at the old data
+  // (which stays live in Firebase, just no longer updated) rather than
+  // reflecting that this browser has moved on. See js/sync.js.
+  if (typeof SYNC_WRITEKEY_KEY !== 'undefined') localStorage.removeItem(SYNC_WRITEKEY_KEY);
+  if (typeof clearSyncUrlBar === 'function') clearSyncUrlBar();
+  if (typeof renderSyncStatusPanel === 'function') renderSyncStatusPanel();
   saveState();
 }
 
