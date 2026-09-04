@@ -1,0 +1,8 @@
+# Internal working docs — kept local, not part of the public app
+CLAUDE.md
+HANDOFF.md
+HANDOFF_LOG.md
+Past prompts/
+
+# Local Claude Code tool-permission config (machine-specific)
+.claude/settings.local.json
