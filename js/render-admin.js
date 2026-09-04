@@ -85,8 +85,45 @@ function renderPreview() {
 
 // ═══════════════════════════════════════════════════════════════
 // ROUND RENDERING — Admin Round Render (live only; the main organiser view)
+//
+// renderAdminRound() is a thin, focus-aware guard around the real work in
+// renderAdminRoundNow() — renderRooms()/renderMultiGameFinals() below both
+// tear down and rebuild every score <input> via innerHTML, which would
+// destroy a focused input (and un-focus the admin mid-keystroke) if called
+// while they're actively typing. This matters now that a remote update from
+// another admin can trigger a re-render at any moment — see "Multiple
+// concurrent admins" in HANDOFF.md. Deferred renders flush on blur via the
+// delegated listener below.
 // ═══════════════════════════════════════════════════════════════
+var adminRenderPending = false;
+
+function isScoreInputFocused() {
+  var el = document.activeElement;
+  return !!(el && el.classList && el.classList.contains('score-inp'));
+}
+
 function renderAdminRound() {
+  if (isScoreInputFocused()) { adminRenderPending = true; return; }
+  adminRenderPending = false;
+  renderAdminRoundNow();
+}
+
+// Delegated rather than attached per-input — renderRooms()/
+// renderMultiGameFinals() destroy and recreate every .score-inp on each
+// render, so a directly-attached listener would need re-attaching every
+// time. Attached once, here, at script load.
+document.addEventListener('focusout', function (e) {
+  if (!adminRenderPending) return;
+  if (!e.target || !e.target.classList || !e.target.classList.contains('score-inp')) return;
+  setTimeout(function () {
+    // One tick later so Tab-navigation between two score inputs (blur the
+    // old one, focus the new one) doesn't trigger a spurious mid-navigation
+    // repaint — only flush once focus has actually left every score input.
+    if (adminRenderPending && !isScoreInputFocused()) { adminRenderPending = false; renderAdminRoundNow(); }
+  }, 0);
+});
+
+function renderAdminRoundNow() {
   checkReserveWindow();
   var ri = T.curRound, round = T.rounds[ri], asgn = T.assignments[ri] || [];
   document.getElementById('hdr-round').textContent = round.roundNum;
@@ -328,6 +365,7 @@ function scoreChanged(input) {
   var key = input.dataset.key;
   var rm = parseInt(input.dataset.rm), ri = parseInt(input.dataset.ri);
   T.scores[key] = input.value === '' ? null : parseInt(input.value);
+  if (typeof syncDirtyScoreKeys !== 'undefined') syncDirtyScoreKeys.add(key);
   invalidateStaleTieResolutions(ri, rm);
   recalcRoom(rm, ri);
   if (T.rounds[T.curRound] && isStandingsRound(T.rounds[T.curRound])) updateQualTable();
@@ -507,6 +545,7 @@ function switchGameTab(g) {
 
 function finalScoreChanged(input) {
   T.finalScores[input.dataset.fkey] = input.value === '' ? '' : parseInt(input.value);
+  if (typeof syncDirtyFinalScoreKeys !== 'undefined') syncDirtyFinalScoreKeys.add(input.dataset.fkey);
   markDirty();
   saveState();
   if (checkGrandFinalRace()) return; // grand-final race still undecided — not over yet

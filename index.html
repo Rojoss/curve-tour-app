@@ -535,15 +535,20 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  INIT — restore any saved tournament from this browser, or (if this
-//  tab was opened via a shared "?t=" live link) enter read-only viewer
-//  mode instead — see js/sync.js.
+//  INIT — restore any saved tournament from this browser, or (if this tab
+//  was opened via a shared "?t=" live link and hasn't unlocked Admin yet)
+//  enter read-only viewer mode instead — see js/sync.js. A tab that
+//  followed a "?t=" link while ALREADY unlocked in this browser (e.g. it
+//  was promoted here on an earlier visit) skips viewer mode entirely and
+//  joins that tournament directly, in case it differs from whatever this
+//  browser last worked on locally.
 // ═══════════════════════════════════════════════════════════════
 if (SYNC_IS_VIEWER) {
   initViewerMode();
 } else {
   loadState();
   renderAdminSecurityPanel();
+  if (SYNC_VIEW_TID && SYNC_VIEW_TID !== T.tournamentId) T.tournamentId = SYNC_VIEW_TID;
   initWriterMode();
 }
 </script>

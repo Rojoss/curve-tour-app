@@ -190,21 +190,16 @@ function loadState() {
 //  single feature area below, so it gets its own small section).
 // ═══════════════════════════════════════════════════════════════
 function switchTab(id, btn) {
-  // A viewer-mode tab (opened via a shared "?t=" live link, see js/sync.js)
-  // has no Admin nav button to click, but this still guards focusTitleInput()
-  // (the header-title click) and a direct console call — any local mutation
-  // a viewer made in Admin would just be silently overwritten by the next
-  // real update from the organiser's own tab, so there's nothing there for
-  // them to usefully do.
-  if (id === 'admin' && typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER) {
-    alert('This is a read-only live view — the organiser\'s own device controls the tournament.');
-    return;
-  }
   // Every entry point into Admin (the nav button and the header-title click
   // via focusTitleInput()) routes through here, so this one guard covers
-  // both — see "Admin access" in HANDOFF.md. Admin stays on the visible nav
-  // deliberately (an admin needs to move between tabs without copy-pasting
-  // a URL); this prompt is what actually keeps an unauthorised visitor out.
+  // both, for a writer OR a viewer-mode tab alike — see "Admin access" in
+  // HANDOFF.md. Admin stays on the visible nav deliberately (an admin needs
+  // to move between tabs without copy-pasting a URL); this prompt is what
+  // actually keeps an unauthorised visitor out. A viewer-mode tab that
+  // enters the correct password here is promoted to a full writer for its
+  // tournament — see promoteViewerToWriter() in js/sync.js — rather than
+  // being turned away; that's the actual join flow for a second admin's
+  // device.
   if (id === 'admin' && !isAdminUnlocked()) {
     showAdminPasswordPrompt(function () { switchTab(id, btn); });
     return;
@@ -239,11 +234,22 @@ function switchTab(id, btn) {
 //  never end up inside an Archive snapshot.
 // ═══════════════════════════════════════════════════════════════
 var ADMIN_UNLOCKED_KEY = 'curveFFA_admin_unlocked';
+// Cached on a successful unlock — this browser's proof that it knows the
+// shared admin secret, reused by pushSyncUpdate() (js/sync.js) to authorize
+// every tournament write, so ANY device that unlocks Admin can immediately
+// co-admin any tournament, new or existing, with no separate per-tournament
+// key to share. Not the plaintext password (a SHA-256 hash, same one
+// verifyAdminSecret() already computes), but a durable, directly-reusable
+// write credential for as long as it sits here — see "Admin access" in
+// HANDOFF.md for why that's an accepted, not a new, exposure. Cleared by
+// lockAdmin(), same lifecycle as ADMIN_UNLOCKED_KEY.
+var ADMIN_PROOF_HASH_KEY = 'curveFFA_admin_proof_hash';
 
 function isAdminUnlocked() { return localStorage.getItem(ADMIN_UNLOCKED_KEY) === 'true'; }
 
 function lockAdmin() {
   localStorage.removeItem(ADMIN_UNLOCKED_KEY);
+  localStorage.removeItem(ADMIN_PROOF_HASH_KEY);
   switchTab('bracket', document.querySelector('nav button[data-tab="bracket"]'));
   renderAdminSecurityPanel();
 }
@@ -261,11 +267,13 @@ async function sha256Hex(str) {
 // wrong. Throws with e.code === 'OFFLINE' if Firebase itself is
 // unreachable (fails closed — never silently grants access just because we
 // couldn't check), distinct from a genuine PERMISSION_DENIED (wrong
-// password) so the UI can tell the two apart.
+// password) so the UI can tell the two apart. Returns the computed hash on
+// success so the caller can cache it as this browser's write credential.
 async function verifyAdminSecret(guess) {
   if (!SYNC_DB) { var e = new Error('Live sync unavailable'); e.code = 'OFFLINE'; throw e; }
   var hash = await sha256Hex(guess);
   await SYNC_DB.ref('adminAuth/verify').set(hash);
+  return hash;
 }
 
 // Called by switchTab()'s guard above. `onSuccess` is switchTab's own
@@ -286,8 +294,12 @@ function submitAdminPasswordPrompt() {
   var btn = document.getElementById('admin-pw-submit');
   errEl.style.display = 'none';
   if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
-  verifyAdminSecret(input.value).then(function () {
+  verifyAdminSecret(input.value).then(function (hash) {
     localStorage.setItem(ADMIN_UNLOCKED_KEY, 'true');
+    localStorage.setItem(ADMIN_PROOF_HASH_KEY, hash);
+    if (typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER && typeof promoteViewerToWriter === 'function') {
+      promoteViewerToWriter();
+    }
     document.getElementById('admin-pw-overlay').style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
     renderAdminSecurityPanel();
@@ -398,7 +410,7 @@ function proceedReset() {
   // in the address bar would otherwise still point viewers at the old data
   // (which stays live in Firebase, just no longer updated) rather than
   // reflecting that this browser has moved on. See js/sync.js.
-  if (typeof SYNC_WRITEKEY_KEY !== 'undefined') localStorage.removeItem(SYNC_WRITEKEY_KEY);
+  if (typeof stopWriterListener === 'function') stopWriterListener();
   if (typeof clearSyncUrlBar === 'function') clearSyncUrlBar();
   if (typeof renderSyncStatusPanel === 'function') renderSyncStatusPanel();
   saveState();

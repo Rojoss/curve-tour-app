@@ -2,26 +2,40 @@
 // Database. See "Cross-tab / cross-device live sync" in HANDOFF.md for the
 // full design writeup and threat model.
 //
-// Two modes, decided ONCE at page load from the URL, never re-evaluated:
-//  - WRITER (no "?t=" param — the organiser's own tab): behaves exactly as
-//    before (localStorage-driven), PLUS pushes T to Firebase, debounced,
-//    every time saveState() runs, so any real mutation gets picked up.
-//  - VIEWER (opened via a shared "?t=<tournamentId>" link): never touches
-//    localStorage or the real T persistence path at all — purely mirrors
-//    whatever the writer last pushed, read-only. Admin is inaccessible in
-//    this mode (see the switchTab() guard in core.js) since any local
-//    mutation a viewer made would just be silently overwritten by the next
-//    real update and could never actually affect the live tournament.
+// Two modes, decided at page load from the URL — but VIEWER, unlike before,
+// is not permanent:
+//  - WRITER (no "?t=" param, or a "?t=" tab that has unlocked Admin — see
+//    promotion below): pushes T to Firebase, debounced, every time
+//    saveState() runs, AND listens for updates from every OTHER writer tab
+//    so several admins can safely work on the same tournament at once — see
+//    "Multiple concurrent admins" in HANDOFF.md.
+//  - VIEWER (opened via a shared "?t=<tournamentId>" link, not yet
+//    unlocked): read-only, never touches localStorage or the real T
+//    persistence path — purely mirrors whatever a writer last pushed.
 //
-// Only the writer ever calls .set() — no operational-transform/merge logic
-// for two simultaneous writer tabs; last write wins, an accepted risk at
-// the same level as this app's other "organiser is a single trusted person"
-// assumptions (see Admin password protection in HANDOFF.md).
+// A viewer tab that successfully unlocks Admin (the SAME shared password,
+// entered via the SAME prompt every tab uses) is PROMOTED to a writer for
+// that exact tournamentId — see promoteViewerToWriter() below. This is the
+// actual join flow for a second admin's device: they open the organiser's
+// live link, then unlock Admin, and become a full co-admin from that point
+// on. Writer authorization itself is unified with the Admin password (see
+// "Admin access" in HANDOFF.md) rather than a separate per-tournament key —
+// any browser that unlocks Admin caches a proof hash (ADMIN_PROOF_HASH_KEY,
+// core.js) it can immediately use to push to ANY tournament.
+//
+// Two simultaneous writers editing the exact same field is still last-
+// write-wins (no operational-transform/CRDT machinery here) — but two
+// writers editing DIFFERENT fields no longer clobber each other, via the
+// dirty-key tracking in pushSyncUpdate()/applyRemoteWriterUpdate() below.
 // ═══════════════════════════════════════════════════════════════
 
 var SYNC_VIEW_TID = new URLSearchParams(location.search).get('t');
-var SYNC_IS_VIEWER = !!SYNC_VIEW_TID;
-var SYNC_WRITEKEY_KEY = 'curveFFA_sync_writekey_v1';
+// A tab that already proved it knows the admin secret in THIS browser
+// (e.g. it was promoted in an earlier visit) skips viewer mode entirely,
+// even if it was opened via a "?t=" link — see the init branch in
+// index.html's trailing script, which adopts SYNC_VIEW_TID as T.tournamentId
+// in that case.
+var SYNC_IS_VIEWER = !!SYNC_VIEW_TID && !isAdminUnlocked();
 
 // Public client config — not a secret; the Realtime Database security rules
 // (see HANDOFF.md) are what actually gate access, not hiding this object.
@@ -52,22 +66,26 @@ var syncPushTimer = null;
 var syncLastError = null;
 var syncHasPushedOnce = false;
 
+// Keys locally mutated but not yet confirmed pushed — see pushSyncUpdate()/
+// applyRemoteWriterUpdate() below. Without this, a remote update arriving
+// mid-typing would wholesale-replace T.scores with the (older, from this
+// tab's perspective) remote copy, silently discarding whatever this admin
+// just typed but hasn't pushed yet — worse than the problem being solved.
+var syncDirtyScoreKeys = new Set();
+var syncDirtyFinalScoreKeys = new Set();
+
 // ═══════════════════════════════════════════════════════════════
 // WRITER SIDE
 // ═══════════════════════════════════════════════════════════════
 
-function generateSyncWriteKey() {
-  var key = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
-  localStorage.setItem(SYNC_WRITEKEY_KEY, key);
-  return key;
-}
-
 // Called once at load for a writer tab — resumes the shareable URL/status
 // panel for an already-generated tournament restored from localStorage, so
-// the organiser doesn't have to regenerate just to get their link back.
+// the organiser doesn't have to regenerate just to get their link back —
+// and (re)subscribes to live updates from other writers on that tournament.
 function initWriterMode() {
   if (T.tournamentId) updateSyncUrlBar();
   renderSyncStatusPanel();
+  startWriterListener();
 }
 
 function updateSyncUrlBar() {
@@ -81,25 +99,105 @@ function clearSyncUrlBar() {
 
 // Debounced — saveState() runs on every real mutation (and every tab
 // switch), so without this a quick run of score entries would fire one
-// Firebase write per keystroke/click instead of one per pause.
+// Firebase write per keystroke/click instead of one per pause. Snapshots
+// each dirty key's VALUE right before the write (not just its name) so
+// that, if a newer keystroke lands on the same key during the in-flight
+// request itself, that key correctly stays dirty rather than being cleared
+// out from under a change the server hasn't actually seen yet.
 function pushSyncUpdate() {
-  if (SYNC_IS_VIEWER || !SYNC_DB || !T.tournamentId) return;
-  var writeKey = localStorage.getItem(SYNC_WRITEKEY_KEY);
-  if (!writeKey) return; // no key yet — proceedGenerateSchedule() hasn't run, nothing to push
+  if (SYNC_IS_VIEWER || !SYNC_DB || !T.tournamentId || !isAdminUnlocked()) return;
+  var proofHash = localStorage.getItem(ADMIN_PROOF_HASH_KEY);
+  if (!proofHash) return; // shouldn't happen once unlocked, but never push without proof
   clearTimeout(syncPushTimer);
   syncPushTimer = setTimeout(function () {
     var payload;
     try { payload = JSON.parse(JSON.stringify(T)); } catch (e) { return; }
-    payload.writeKey = writeKey; // read by the security rules — see HANDOFF.md
+    payload.adminProof = proofHash; // read by the security rules — see HANDOFF.md
+    var pushedScores = {}, pushedFinalScores = {};
+    syncDirtyScoreKeys.forEach(function (k) { pushedScores[k] = T.scores[k]; });
+    syncDirtyFinalScoreKeys.forEach(function (k) { pushedFinalScores[k] = T.finalScores[k]; });
     SYNC_DB.ref('tournaments/' + T.tournamentId).set(payload).then(function () {
+      Object.keys(pushedScores).forEach(function (k) { if (T.scores[k] === pushedScores[k]) syncDirtyScoreKeys.delete(k); });
+      Object.keys(pushedFinalScores).forEach(function (k) { if (T.finalScores[k] === pushedFinalScores[k]) syncDirtyFinalScoreKeys.delete(k); });
       syncLastError = null;
       syncHasPushedOnce = true;
       renderSyncStatusPanel();
     }).catch(function (e) {
+      // Push failed — every snapshotted key stays dirty (correctly: none of
+      // it actually reached the server), so the next successful push retries it.
       syncLastError = (e && e.message) ? e.message : String(e);
       renderSyncStatusPanel();
     });
   }, 400);
+}
+
+// This tab's live subscription to every OTHER writer's changes on the same
+// tournament — the actual fix for "several admins active at once silently
+// overwriting each other." Idempotent: always tears down any prior
+// subscription first, so regenerating a schedule on an already-running
+// tournament (no Reset in between) never leaves two callbacks firing.
+var syncWriterListenerRef = null;
+
+function startWriterListener() {
+  stopWriterListener();
+  if (SYNC_IS_VIEWER || !SYNC_DB || !T.tournamentId) return;
+  syncWriterListenerRef = SYNC_DB.ref('tournaments/' + T.tournamentId);
+  syncWriterListenerRef.on('value', function (snapshot) {
+    var payload = snapshot.val();
+    if (payload) applyRemoteWriterUpdate(payload);
+  }, function (error) {
+    console.warn('Live sync (writer) connection lost', error);
+  });
+}
+
+function stopWriterListener() {
+  if (syncWriterListenerRef) { syncWriterListenerRef.off(); syncWriterListenerRef = null; }
+}
+
+// Adopts a remote value for a key only if THIS tab has no unpushed local
+// edit for it — see the dirty-key comment above. Deliberately scoped to
+// scores/finalScores only (the fields that get rapid, per-keystroke local
+// edits); every other field in T changes via rarer, singular actions, so a
+// coarser whole-field remote-wins replacement (below) is an acceptable,
+// much simpler tradeoff for those.
+function mergeRemoteScoreField(remoteObj, localObj, dirtySet) {
+  if (!remoteObj) return;
+  Object.keys(remoteObj).forEach(function (k) {
+    if (!dirtySet.has(k)) localObj[k] = remoteObj[k];
+  });
+}
+
+function applyRemoteWriterUpdate(payload) {
+  delete payload.adminProof;
+  mergeRemoteScoreField(payload.scores, T.scores, syncDirtyScoreKeys);
+  mergeRemoteScoreField(payload.finalScores, T.finalScores, syncDirtyFinalScoreKeys);
+  // Already merged in place above — must not let the blanket Object.assign
+  // below clobber T.scores/T.finalScores with the raw (un-merged) remote
+  // object references.
+  delete payload.scores;
+  delete payload.finalScores;
+  Object.assign(T, payload);
+  updateTitleDisplay();
+  var hdrRound = document.getElementById('hdr-round');
+  if (hdrRound) hdrRound.textContent = (T.rounds && T.rounds[T.curRound]) ? T.rounds[T.curRound].roundNum : '—';
+  // renderAdminRound() itself defers if a score input is currently focused
+  // (see js/render-admin.js) — safe to call unconditionally here.
+  var activeTab = getActiveTab();
+  if (activeTab === 'admin') {
+    // Mirrors loadState()'s own panel-setup/panel-running toggle (core.js) —
+    // needed here too, since a promoted-from-viewer tab never ran loadState()
+    // and starts with whichever panel the static HTML defaults to; also
+    // handles a promoted admin watching T.started flip live if a different
+    // admin clicks "Confirm & Start" while they're on the preview.
+    document.getElementById('panel-setup').style.display = T.started ? 'none' : 'block';
+    document.getElementById('panel-running').style.display = T.started ? 'block' : 'none';
+    if (T.started) renderAdminRound();
+    else if (T.rounds && T.rounds.length) { renderPreview(); document.getElementById('preview-wrap').style.display = 'block'; }
+  }
+  else if (activeTab === 'scoreboard') renderScoreboard();
+  else if (activeTab === 'bracket') renderBracket();
+  else if (activeTab === 'players') renderPlayers();
+  else if (activeTab === 'rankings') renderRankings();
 }
 
 function copyLiveLink() {
@@ -149,27 +247,33 @@ function renderSyncStatusPanel() {
 // ═══════════════════════════════════════════════════════════════
 
 function initViewerMode() {
-  var adminBtn = document.querySelector('nav button[data-tab="admin"]');
-  if (adminBtn) adminBtn.style.display = 'none';
+  // Admin nav stays visible even here — clicking it prompts for the shared
+  // password same as everywhere else, and a correct entry promotes this tab
+  // to a writer (see promoteViewerToWriter() below). Archive stays hidden:
+  // it's genuinely local-device-only data, meaningless until (and even
+  // briefly after) promotion.
   var archiveBtn = document.querySelector('nav button[data-tab="archive"]');
-  if (archiveBtn) archiveBtn.style.display = 'none'; // archive is organiser-only local data, meaningless for a viewer
+  if (archiveBtn) archiveBtn.style.display = 'none';
   showSyncViewerOverlay('Connecting…', 'Loading the live tournament.');
   switchTab('bracket', document.querySelector('nav button[data-tab="bracket"]'));
   startViewerListener();
 }
+
+var syncViewerListenerRef = null;
 
 function startViewerListener() {
   if (!SYNC_DB) {
     showSyncViewerOverlay('Live sync unavailable', 'The live-sync library couldn\'t load — check your connection and reload the page.');
     return;
   }
-  SYNC_DB.ref('tournaments/' + SYNC_VIEW_TID).on('value', function (snapshot) {
+  syncViewerListenerRef = SYNC_DB.ref('tournaments/' + SYNC_VIEW_TID);
+  syncViewerListenerRef.on('value', function (snapshot) {
     var payload = snapshot.val();
     if (!payload) {
       showSyncViewerOverlay('Waiting for the tournament to start…', 'This link is valid, but the organiser hasn\'t generated a schedule yet. This page updates automatically once they do.');
       return;
     }
-    delete payload.writeKey;
+    delete payload.adminProof;
     Object.assign(T, payload);
     hideSyncViewerOverlay();
     hideSyncStaleBanner();
@@ -178,6 +282,29 @@ function startViewerListener() {
     showSyncStaleBanner(); // data already on screen stays visible — only a banner, not a blocking overlay, see HANDOFF.md
     console.warn('Live sync connection lost', error);
   });
+}
+
+function stopViewerListener() {
+  if (syncViewerListenerRef) { syncViewerListenerRef.off(); syncViewerListenerRef = null; }
+}
+
+// The actual join flow for a second admin's device: they open the
+// organiser's live link (viewer mode, read-only), then unlock Admin with
+// the shared password — submitAdminPasswordPrompt() calls this on success
+// when the tab was in viewer mode. Swaps the read-only viewer subscription
+// for a full writer one on the SAME tournamentId, and this tab behaves
+// exactly like any other writer from this point on.
+function promoteViewerToWriter() {
+  stopViewerListener();
+  hideSyncViewerOverlay();
+  hideSyncStaleBanner();
+  SYNC_IS_VIEWER = false;
+  T.tournamentId = SYNC_VIEW_TID;
+  var archiveBtn = document.querySelector('nav button[data-tab="archive"]');
+  if (archiveBtn) archiveBtn.style.display = '';
+  updateSyncUrlBar();
+  renderSyncStatusPanel();
+  startWriterListener();
 }
 
 function showSyncViewerOverlay(title, msg) {

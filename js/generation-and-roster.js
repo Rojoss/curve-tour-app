@@ -575,12 +575,12 @@ function proceedGenerateSchedule() {
   T.needsSave = false;
   T.autoSaved = false;
   T.tournamentId = String(Date.now());
-  // Fresh write key + shareable link for this specific generation — see
-  // js/sync.js. A new key every generation (never reused across
-  // tournaments) means an old, no-longer-updated live link can never be
-  // used to push data into a new one.
-  if (typeof generateSyncWriteKey === 'function') generateSyncWriteKey();
+  // Fresh shareable link for this specific generation — see js/sync.js.
+  // Writability itself no longer comes from a per-tournament key; any
+  // browser that has unlocked Admin (proven the shared secret) can push to
+  // any tournament, this one included — see "Admin access" in HANDOFF.md.
   if (typeof updateSyncUrlBar === 'function') updateSyncUrlBar();
+  if (typeof startWriterListener === 'function') startWriterListener();
   // "Bye" odd-count strategy, Round 1 only: every later round's bye (if any)
   // is handled live in advanceRound(), but Round 1 has no prior round to
   // compute a live advancing pool from — it's seeded directly from the
