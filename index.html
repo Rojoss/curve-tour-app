@@ -284,8 +284,6 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
             <option value="single-elimination">Single elimination</option>
             <option value="double-elimination">Double elimination</option>
             <option value="kings-valley" disabled>Kings Valley (coming soon)</option>
-            <option value="swiss" disabled>Swiss rounds (coming soon)</option>
-            <option value="group-knockout" disabled>Group stage into knockout (coming soon)</option>
           </select></div>
         <div class="field"><label>Game format</label>
           <select id="cfg-game-format" onchange="toggleFormatFields()">
@@ -308,6 +306,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
             <option value="raw">Raw score only</option>
           </select></div>
         <div class="field"><label>Pooling phase</label>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Combines with Schedule logic above — e.g. Group Stage + Classic elimination = groups feeding into a knockout bracket.</div>
           <select id="cfg-pooling-phase" onchange="togglePoolingPhaseField()">
             <option value="none">None — standard elimination from R1</option>
             <option value="qual-table">Qualification Table — R1/R2/R3 feed cumulative table</option>
