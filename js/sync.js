@@ -154,7 +154,7 @@ function initViewerMode() {
   var archiveBtn = document.querySelector('nav button[data-tab="archive"]');
   if (archiveBtn) archiveBtn.style.display = 'none'; // archive is organiser-only local data, meaningless for a viewer
   showSyncViewerOverlay('Connecting…', 'Loading the live tournament.');
-  switchTab('scoreboard', document.querySelector('nav button[data-tab="scoreboard"]'));
+  switchTab('bracket', document.querySelector('nav button[data-tab="bracket"]'));
   startViewerListener();
 }
 

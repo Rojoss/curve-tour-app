@@ -252,9 +252,9 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 </header>
 
 <nav>
-  <button class="active" data-tab="admin" onclick="switchTab('admin',this)">⚙ Admin</button>
+  <button data-tab="admin" onclick="switchTab('admin',this)">⚙ Admin</button>
   <button data-tab="scoreboard" onclick="switchTab('scoreboard',this)">📊 Scoreboard</button>
-  <button data-tab="bracket" onclick="switchTab('bracket',this)">🗂 Bracket</button>
+  <button class="active" data-tab="bracket" onclick="switchTab('bracket',this)">🗂 Bracket</button>
   <button data-tab="players" onclick="switchTab('players',this)">🎮 Players</button>
   <button data-tab="rankings" onclick="switchTab('rankings',this)">🏆 Rankings</button>
   <button data-tab="archive" onclick="switchTab('archive',this)">🗄 Archive</button>
@@ -265,7 +265,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <div class="msg msg-err" id="sync-stale-banner" style="display:none">⚠ Live connection lost — what you're seeing may be out of date. Reload to try reconnecting.</div>
 
 <!-- ═══ ADMIN ═══ -->
-<div class="view active" id="view-admin">
+<div class="view" id="view-admin">
   <div class="card" id="admin-security-panel"></div>
   <div id="panel-setup">
     <div class="card">
@@ -415,7 +415,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 </div>
 
 <!-- ═══ BRACKET ═══ -->
-<div class="view" id="view-bracket">
+<div class="view active" id="view-bracket">
   <div id="br-empty" class="msg msg-info">Start a tournament in Admin to see the bracket overview.</div>
   <div id="br-content" style="display:none">
     <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament bracket — green = advanced, grey = eliminated, purple = lucky loser. Current round highlighted.</p>
@@ -500,13 +500,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <!-- ═══ ADMIN PASSWORD PROMPT ═══ -->
 <div class="modal-overlay" id="admin-pw-overlay" style="display:none">
   <div class="modal-box">
-    <div class="modal-title">🔒 Admin is password-protected</div>
+    <div class="modal-title">🔒 Admin access</div>
     <div class="field" style="margin-bottom:8px">
       <input type="password" id="admin-pw-input" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')submitAdminPasswordPrompt()">
     </div>
     <div class="msg msg-err" id="admin-pw-error" style="display:none"></div>
     <div class="modal-btns">
-      <button class="btn btn-success" onclick="submitAdminPasswordPrompt()">Unlock</button>
+      <button class="btn btn-success" id="admin-pw-submit" onclick="submitAdminPasswordPrompt()">Unlock</button>
       <button class="btn btn-secondary" onclick="cancelAdminPasswordPrompt()">Cancel</button>
     </div>
   </div>

@@ -202,9 +202,10 @@ function switchTab(id, btn) {
   }
   // Every entry point into Admin (the nav button and the header-title click
   // via focusTitleInput()) routes through here, so this one guard covers
-  // both — see "Admin password protection" in HANDOFF.md for why this is a
-  // deterrent only, not real access control.
-  if (id === 'admin' && isAdminProtected() && !isAdminUnlocked()) {
+  // both — see "Admin access" in HANDOFF.md. Admin stays on the visible nav
+  // deliberately (an admin needs to move between tabs without copy-pasting
+  // a URL); this prompt is what actually keeps an unauthorised visitor out.
+  if (id === 'admin' && !isAdminUnlocked()) {
     showAdminPasswordPrompt(function () { switchTab(id, btn); });
     return;
   }
@@ -221,70 +222,50 @@ function switchTab(id, btn) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ADMIN PASSWORD PROTECTION — a deterrent, not real security: this is a
-//  client-only app with no backend, so anyone who opens browser dev tools
-//  can read localStorage or call these functions directly regardless of
-//  any check here. Scoped explicitly to keep a casual/curious participant
-//  out of Admin, nothing more — see "Admin password protection" in
-//  HANDOFF.md for the full threat-model discussion.
+// ADMIN ACCESS — a single shared secret, distributed by the organiser to
+//  trusted admins, verified SERVER-SIDE against Firebase Realtime Database
+//  (see js/sync.js and "Admin access" in HANDOFF.md) — not merely compared
+//  in this browser's own JS. Replaces the original per-browser self-serve
+//  password (anyone's first visit could set their own — which restricted
+//  nobody but themselves) with a fixed secret only the organiser can set,
+//  bootstrapped once into Firebase and never readable back by any client.
+//  This is real access control now, not a deterrent: a wrong guess is
+//  rejected by Firebase's own security rules regardless of what a client's
+//  devtools claims — see verifyAdminSecret() below.
 //
-//  Both keys below are standalone top-level localStorage entries,
-//  deliberately NOT part of T — they must survive Generate/Reset (the
-//  organiser shouldn't have to re-set their password every time they
-//  regenerate a tournament) and must never end up inside an Archive
-//  snapshot (JSON.parse(JSON.stringify(T)) never touches them, so a
-//  shared archive export can never leak the password hash).
+//  ADMIN_UNLOCKED_KEY is a standalone top-level localStorage entry,
+//  deliberately NOT part of T — it must survive Generate/Reset (an admin
+//  shouldn't have to re-enter the password every regeneration) and must
+//  never end up inside an Archive snapshot.
 // ═══════════════════════════════════════════════════════════════
-var ADMIN_PW_HASH_KEY = 'curveFFA_admin_pw_hash';
 var ADMIN_UNLOCKED_KEY = 'curveFFA_admin_unlocked';
-
-// Small, fast, synchronous, dependency-free string hash (djb2 variant) —
-// deliberately NOT a cryptographic hash (no Web Crypto/SHA-256): this app
-// is sometimes opened directly via file://, where crypto.subtle's secure-
-// context requirement is inconsistent across browsers, and a "real" hash
-// buys no real security here anyway (see the section comment above). Good
-// enough to avoid showing the plaintext password at a glance in
-// localStorage/devtools — nothing more is claimed for it.
-function simpleHash(str) {
-  var h = 5381;
-  for (var i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
-  return h.toString(36);
-}
-
-function isAdminProtected() { return !!localStorage.getItem(ADMIN_PW_HASH_KEY); }
 
 function isAdminUnlocked() { return localStorage.getItem(ADMIN_UNLOCKED_KEY) === 'true'; }
 
-// Also used by changeAdminPassword()/submitNewAdminPassword() — setting a
-// (new) password unlocks immediately, since the organiser who just typed it
-// shouldn't have to re-enter it a second time right after.
-function setAdminPassword(pw) {
-  if (!pw) { alert('Enter a password first.'); return; }
-  localStorage.setItem(ADMIN_PW_HASH_KEY, simpleHash(pw));
-  localStorage.setItem(ADMIN_UNLOCKED_KEY, 'true');
-  renderAdminSecurityPanel();
-}
-
-function submitNewAdminPassword() {
-  setAdminPassword(document.getElementById('admin-pw-new').value);
-}
-
-function changeAdminPassword() {
-  var pw = prompt('New admin password:');
-  if (pw === null) return; // cancelled
-  setAdminPassword(pw);
-}
-
-function removeAdminPassword() {
-  if (!confirm('Remove admin password protection? Anyone with the page link will be able to reach Admin from then on.')) return;
-  localStorage.removeItem(ADMIN_PW_HASH_KEY);
-  localStorage.removeItem(ADMIN_UNLOCKED_KEY);
-  renderAdminSecurityPanel();
-}
-
 function lockAdmin() {
   localStorage.removeItem(ADMIN_UNLOCKED_KEY);
-  switchTab('scoreboard', document.querySelector('nav button[data-tab="scoreboard"]'));
+  switchTab('bracket', document.querySelector('nav button[data-tab="bracket"]'));
+  renderAdminSecurityPanel();
+}
+
+async function sha256Hex(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Verifies a guess without the real hash ever being readable by any client
+// (the Realtime Database rule for "adminAuth/hash" is .read:false). A write
+// to "adminAuth/verify" is only PERMITTED by the rule if the value being
+// written equals the real stored hash — so the write's own success/failure
+// IS the answer, and the real hash is never exposed either way, right or
+// wrong. Throws with e.code === 'OFFLINE' if Firebase itself is
+// unreachable (fails closed — never silently grants access just because we
+// couldn't check), distinct from a genuine PERMISSION_DENIED (wrong
+// password) so the UI can tell the two apart.
+async function verifyAdminSecret(guess) {
+  if (!SYNC_DB) { var e = new Error('Live sync unavailable'); e.code = 'OFFLINE'; throw e; }
+  var hash = await sha256Hex(guess);
+  await SYNC_DB.ref('adminAuth/verify').set(hash);
 }
 
 // Called by switchTab()'s guard above. `onSuccess` is switchTab's own
@@ -302,18 +283,26 @@ function showAdminPasswordPrompt(onSuccess) {
 function submitAdminPasswordPrompt() {
   var input = document.getElementById('admin-pw-input');
   var errEl = document.getElementById('admin-pw-error');
-  if (simpleHash(input.value) !== localStorage.getItem(ADMIN_PW_HASH_KEY)) {
-    errEl.textContent = 'Incorrect password.';
+  var btn = document.getElementById('admin-pw-submit');
+  errEl.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  verifyAdminSecret(input.value).then(function () {
+    localStorage.setItem(ADMIN_UNLOCKED_KEY, 'true');
+    document.getElementById('admin-pw-overlay').style.display = 'none';
+    if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+    renderAdminSecurityPanel();
+    var cb = _adminPwPromptCallback;
+    _adminPwPromptCallback = null;
+    if (cb) cb();
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+    errEl.textContent = (e && e.code === 'OFFLINE')
+      ? 'Can\'t verify the password right now — check your connection and try again.'
+      : 'Incorrect password.';
     errEl.style.display = 'block';
     input.value = '';
     input.focus();
-    return;
-  }
-  localStorage.setItem(ADMIN_UNLOCKED_KEY, 'true');
-  document.getElementById('admin-pw-overlay').style.display = 'none';
-  var cb = _adminPwPromptCallback;
-  _adminPwPromptCallback = null;
-  if (cb) cb();
+  });
 }
 
 function cancelAdminPasswordPrompt() {
@@ -322,31 +311,21 @@ function cancelAdminPasswordPrompt() {
 }
 
 // The one always-visible block in #view-admin (sits above panel-setup/
-// panel-running, not inside either — unlike the Tournament Name fields,
-// this isn't tied to pre-/post-generation state, so it doesn't need
-// duplicating into both panels). Called once on page load and after every
-// state-changing action above.
+// panel-running, not inside either). Called once on page load and after
+// every unlock/lock — in normal use this is only ever actually seen in its
+// "unlocked" state, since switchTab()'s guard never lets an unauthenticated
+// visitor's browser render #view-admin's contents at all; the "locked"
+// branch is a defensive fallback, not a reachable state in the ordinary flow.
 function renderAdminSecurityPanel() {
   var el = document.getElementById('admin-security-panel');
   if (!el) return;
-  if (isAdminProtected()) {
-    el.innerHTML = `<div class="card-title">Admin Security</div>
-      <div class="msg msg-info" style="margin-bottom:10px">🔒 Admin is password-protected on this browser.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="changeAdminPassword()">Change Password</button>
-        <button class="btn btn-secondary btn-sm" onclick="removeAdminPassword()">Remove Protection</button>
-        <button class="btn btn-amber btn-sm" onclick="lockAdmin()">🔒 Lock Admin</button>
-      </div>`;
+  if (isAdminUnlocked()) {
+    el.innerHTML = `<div class="card-title">Admin Access</div>
+      <div class="msg msg-ok" style="margin-bottom:10px">🔓 Unlocked in this browser.</div>
+      <button class="btn btn-amber btn-sm" onclick="lockAdmin()">🔒 Lock Admin</button>`;
   } else {
-    el.innerHTML = `<div class="card-title">Admin Security</div>
-      <div class="field" style="margin-bottom:8px">
-        <input type="password" id="admin-pw-new" placeholder="Set an admin password (optional)" onkeydown="if(event.key==='Enter')submitNewAdminPassword()">
-      </div>
-      <button class="btn btn-success btn-sm" onclick="submitNewAdminPassword()">Set Password</button>
-      <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">
-        A light deterrent only — this app has no backend, so anyone with browser dev tools can bypass it regardless. Don't reuse a real password here.
-        Forgot it? Run <code>localStorage.removeItem('curveFFA_admin_pw_hash')</code> in the browser console — this doesn't touch your tournament data.
-      </div>`;
+    el.innerHTML = `<div class="card-title">Admin Access</div>
+      <div class="msg msg-info">🔒 Locked — enter the shared admin password to continue.</div>`;
   }
 }
 
