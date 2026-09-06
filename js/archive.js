@@ -31,12 +31,13 @@ function saveArchiveEntry(entry) {
   localStorage.setItem('curveFFA_archive_' + entry.id, JSON.stringify(entry));
 }
 
-function buildArchiveSummary(id, title, dateSaved) {
+function buildArchiveSummary(id, title, dateSaved, state) {
+  state = state || T; // matches computeRankings()'s own state-defaults-to-T idiom
   return {
     id, title, dateSaved,
-    tournamentId: T.tournamentId, // identity for de-dup matching — see saveToArchive/archiveSilently
-    playerCount: T.players.length,
-    roundsPlayed: T.rounds[T.curRound] ? T.rounds[T.curRound].roundNum : 0
+    tournamentId: state.tournamentId, // identity for de-dup matching — see saveToArchive/archiveSilently
+    playerCount: state.players.length,
+    roundsPlayed: state.rounds[state.curRound] ? state.rounds[state.curRound].roundNum : 0
   };
 }
 
@@ -265,4 +266,204 @@ function exportFullArchive() {
   var entries = index.map(e => getArchiveEntry(e.id)).filter(Boolean);
   var dateStr = new Date().toISOString().slice(0, 10);
   downloadJson(`curve-tournament-archive_${dateStr}.json`, { exportedAt: new Date().toISOString(), tournaments: entries });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ARCHIVE — IMPORT. Restores from a file produced by exportEntryAsJson()
+//  or exportFullArchive(). Neither export shape carries a version field,
+//  so a file is routed structurally: a `tournaments` array means a full-
+//  archive bundle, an `id`+`snapshot` pair means a single entry. Operates
+//  ONLY on curveFFA_archive_index/curveFFA_archive_{id} — never reads or
+//  writes T, never calls saveState() (which would push live T to Firebase
+//  as a side effect of a purely local archive operation).
+// ═══════════════════════════════════════════════════════════════
+var ARCHIVE_IMPORT_MAX_BYTES = 25 * 1024 * 1024;
+
+function handleArchiveImportFile(input) {
+  var file = input.files && input.files[0];
+  input.value = ''; // so re-selecting the same file still fires change
+  if (!file) return;
+  if (file.size > ARCHIVE_IMPORT_MAX_BYTES) { alert("That file is too large to be a tournament export — nothing was imported."); return; }
+  var reader = new FileReader();
+  reader.onerror = function () { alert("Couldn't read that file — it may be unreadable or no longer available."); };
+  reader.onload = function () { importArchiveFromText(String(reader.result)); };
+  reader.readAsText(file);
+}
+
+function importArchiveFromText(text) {
+  var data;
+  try { data = JSON.parse(text); }
+  catch (e) { alert("That file isn't valid JSON — it may be corrupted, or not a Curve tournament export."); return; }
+
+  if (data && Array.isArray(data.tournaments)) {
+    if (!data.tournaments.length) { alert("That full-archive file contains no tournaments — nothing to import."); return; }
+    startArchiveImport(data.tournaments, true);
+  } else if (isValidArchiveImportEntry(data)) {
+    startArchiveImport([data], false);
+  } else {
+    alert("That JSON file isn't a Curve tournament export — expected either a single archived tournament or a full-archive file.");
+  }
+}
+
+// Minimum shape a snapshot needs to render without throwing: openArchiveEntry()
+// dereferences snap.players.length/snap.rounds, and computeRankings() (js/advancement.js)
+// dereferences state.assignments.length completely unguarded — a "valid" import must
+// never be one that crashes the moment its row is opened.
+function isValidArchiveImportEntry(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (raw.id === undefined || raw.id === null) return false;
+  var s = raw.snapshot;
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return false;
+  return Array.isArray(s.players) && Array.isArray(s.rounds) && Array.isArray(s.assignments);
+}
+
+function validArchiveDate(v) {
+  if (typeof v !== 'string' || !v) return null;
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? null : v;
+}
+
+function mintArchiveId(index) {
+  // A single import can mint several ids inside one synchronous loop (bulk
+  // "import as new copies") — unlike every other String(Date.now()) call site
+  // in this file, which only ever mints one id per user interaction, seconds
+  // apart, a same-millisecond collision here is the likely case, not the
+  // practically-impossible one.
+  var id = String(Date.now());
+  while (index.some(e => String(e.id) === id) || localStorage.getItem('curveFFA_archive_' + id) !== null) {
+    id = String(Number(id) + 1);
+  }
+  return id;
+}
+
+function startArchiveImport(raws, isBundle) {
+  var index = getArchiveIndex();
+  var existingIds = {};
+  index.forEach(e => { existingIds[String(e.id)] = e; });
+
+  var valid = [], invalid = 0;
+  raws.forEach(r => { if (isValidArchiveImportEntry(r)) valid.push(r); else invalid++; });
+
+  if (!valid.length) {
+    alert(isBundle
+      ? "Nothing was imported — none of the " + raws.length + " entries in that file contained usable tournament data."
+      : "That file doesn't contain a usable tournament — nothing was imported.");
+    return;
+  }
+
+  var collisions = valid.filter(r => existingIds[String(r.id)] !== undefined);
+
+  if (!collisions.length) {
+    finishArchiveImport(runArchiveImport(valid, 'overwrite'), invalid, isBundle);
+    return;
+  }
+
+  if (!isBundle) {
+    var existingTitle = existingIds[String(valid[0].id)].title;
+    showModal('Already in your archive',
+      'An archived tournament with this ID already exists ("' + existingTitle + '"). Overwrite it, import it as a separate new entry, or cancel?',
+      [
+        { label: 'Overwrite existing', className: 'btn-danger', onClick: () => finishArchiveImport(runArchiveImport(valid, 'overwrite'), invalid, isBundle) },
+        { label: 'Import as new entry', className: 'btn-secondary', onClick: () => finishArchiveImport(runArchiveImport(valid, 'new'), invalid, isBundle) },
+        { label: 'Cancel', className: 'btn-secondary' }
+      ]);
+    return;
+  }
+
+  showModal('Some of these are already archived',
+    collisions.length + ' of the ' + valid.length + ' tournaments in this file are already in your archive. How should those be handled? This choice applies to all ' + collisions.length + '.',
+    [
+      { label: 'Overwrite existing', className: 'btn-danger', onClick: () => finishArchiveImport(runArchiveImport(valid, 'overwrite'), invalid, isBundle) },
+      { label: 'Import all as new copies', className: 'btn-secondary', onClick: () => finishArchiveImport(runArchiveImport(valid, 'new'), invalid, isBundle) },
+      { label: 'Skip the duplicates', className: 'btn-secondary', onClick: () => finishArchiveImport(runArchiveImport(valid, 'skip'), invalid, isBundle) },
+      { label: 'Cancel', className: 'btn-secondary' }
+    ]);
+}
+
+// The write loop. mode: 'overwrite' (matching ids replace in place), 'new'
+// (every entry mints a fresh id, even non-colliding ones stay as-is since
+// mintArchiveId is only consulted on an actual id collision below), 'skip'
+// (colliding entries are dropped, non-colliding still import).
+function runArchiveImport(valid, mode) {
+  var index = getArchiveIndex();
+  var counts = { added: 0, overwritten: 0, skippedDup: 0, failed: 0, lastTitle: null, mode: mode };
+
+  for (var i = 0; i < valid.length; i++) {
+    var raw = valid[i];
+    var idx = index.findIndex(e => String(e.id) === String(raw.id));
+    var id, isOverwrite = false;
+    if (idx === -1) { id = String(raw.id); }
+    else if (mode === 'skip') { counts.skippedDup++; continue; }
+    else if (mode === 'new') { id = mintArchiveId(index); }
+    else { id = String(raw.id); isOverwrite = true; }
+
+    var snapshot = raw.snapshot;
+    var title = (typeof raw.title === 'string' ? raw.title.trim() : '') || 'Unnamed Tournament';
+    var dateSaved = validArchiveDate(raw.dateSaved) || new Date().toISOString();
+    var entry = {
+      id, title, dateSaved,
+      tournamentId: snapshot.tournamentId !== undefined ? snapshot.tournamentId : (raw.tournamentId != null ? raw.tournamentId : null),
+      snapshot,
+      annotations: Array.isArray(raw.annotations) ? raw.annotations : []
+    };
+
+    try { saveArchiveEntry(entry); }
+    catch (e) { counts.failed = valid.length - i; break; }
+
+    var summary = buildArchiveSummary(id, title, dateSaved, snapshot);
+    var at = index.findIndex(e => String(e.id) === String(id));
+    if (at === -1) index.push(summary); else index[at] = summary;
+    if (isOverwrite) counts.overwritten++; else counts.added++;
+    counts.lastTitle = title;
+  }
+
+  try { saveArchiveIndex(index); } catch (e) {}
+  return counts;
+}
+
+function describeArchiveImport(counts, invalid, isBundle) {
+  var total = counts.added + counts.overwritten;
+
+  if (!isBundle) {
+    if (!total) {
+      if (counts.failed) return "Couldn't import — your browser's storage is full.";
+      return "That file doesn't contain a usable tournament — nothing was imported.";
+    }
+    var name = 'Imported "' + counts.lastTitle + '"';
+    if (counts.overwritten) return name + ' — replaced the copy already in your archive.';
+    if (counts.mode === 'new') return name + ' as a second, separate archive entry.';
+    return name + '.';
+  }
+
+  var parts = [];
+  if (counts.overwritten) parts.push(counts.overwritten + ' replaced existing copy' + (counts.overwritten === 1 ? '' : 'ies'));
+  if (counts.skippedDup) parts.push(counts.skippedDup + ' skipped — already archived');
+  if (invalid) parts.push(invalid + ' skipped — invalid data');
+
+  if (!total) {
+    if (counts.failed) return "Couldn't import — your browser's storage is full.";
+    var reasons = [];
+    if (counts.skippedDup) reasons.push(counts.skippedDup + ' were already archived');
+    if (invalid) reasons.push(invalid + ' contained no usable tournament data');
+    return reasons.length
+      ? "Nothing was imported — of the " + (counts.skippedDup + invalid) + " entries in that file, " + reasons.join(' and ') + "."
+      : "Nothing was imported — none of the entries in that file contained usable tournament data.";
+  }
+
+  var msg = 'Imported ' + total + ' tournament' + (total === 1 ? '' : 's') + (parts.length ? ' (' + parts.join(', ') + ')' : '') + '.';
+  if (counts.failed) msg += ' Ran out of browser storage — the remaining ' + counts.failed + ' were not imported.';
+  return msg;
+}
+
+function finishArchiveImport(counts, invalid, isBundle) {
+  renderArchiveList();
+  alert(describeArchiveImport(counts, invalid, isBundle));
+}
+
+function deleteArchiveEntry(id) {
+  var entry = getArchiveEntry(id);
+  if (!confirm('Permanently delete "' + (entry ? entry.title : 'this tournament') + '" from the archive? This cannot be undone.')) return;
+  localStorage.removeItem('curveFFA_archive_' + id);
+  saveArchiveIndex(getArchiveIndex().filter(e => String(e.id) !== String(id)));
+  backToArchiveList();
 }

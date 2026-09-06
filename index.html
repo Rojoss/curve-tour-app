@@ -555,10 +555,14 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <!-- ═══ ARCHIVE ═══ -->
 <div class="view" id="view-archive">
   <div id="ar-list-view">
-    <div id="ar-export-all-wrap" style="display:none;margin-bottom:14px">
-      <button class="btn btn-secondary" onclick="exportFullArchive()">⬇ Export full archive</button>
+    <div class="btn-row" style="margin-top:0;margin-bottom:14px">
+      <button class="btn btn-secondary" onclick="document.getElementById('ar-import-file').click()">⬆ Import from file</button>
+      <div id="ar-export-all-wrap" style="display:none">
+        <button class="btn btn-secondary" onclick="exportFullArchive()">⬇ Export full archive</button>
+      </div>
     </div>
-    <div id="ar-empty" class="msg msg-info" style="display:none">No tournaments archived yet — completed tournaments saved from Admin will show up here.</div>
+    <input type="file" id="ar-import-file" accept="application/json,.json" style="display:none" onchange="handleArchiveImportFile(this)">
+    <div id="ar-empty" class="msg msg-info" style="display:none">No tournaments archived yet — completed tournaments saved from Admin will show up here, or import a previously exported file above.</div>
     <div id="ar-list"></div>
   </div>
   <div id="ar-detail-view" style="display:none">
@@ -566,6 +570,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
       <button class="btn btn-secondary" onclick="backToArchiveList()">← Back to list</button>
       <button class="btn btn-purple" onclick="exportEntryAsJson()">⬇ Export as JSON</button>
       <button class="btn btn-purple" onclick="downloadArchiveRankingsImage()">⬇ Download rankings image</button>
+      <button class="btn btn-danger" onclick="deleteArchiveEntry(currentArchiveEntry.id)" title="Permanently delete this archived tournament">🗑 Delete</button>
     </div>
     <div class="msg msg-info">This is a saved snapshot — read-only, no auto-refresh.</div>
     <div class="summary-bar" id="ar-detail-summary"></div>

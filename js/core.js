@@ -465,8 +465,9 @@ async function downloadArchiveRankingsImage() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ARCHIVE — Modal (generic reusable 2/3-option confirmation dialog;
-//  only used by Archive's save/unsaved-changes flows today. Buttons
+// ARCHIVE — Modal (generic reusable 2/3/4-option confirmation dialog;
+//  used by Archive's save/unsaved-changes flows and its import collision
+//  dialogs (js/archive.js). Buttons
 //  are built with real DOM nodes + closures (not inline onclick
 //  strings) so titles/labels never need HTML-escaping gymnastics.
 // ═══════════════════════════════════════════════════════════════
@@ -489,7 +490,7 @@ function hideModal() {
   document.getElementById('modal-overlay').style.display = 'none';
 }
 
-// --- JSON export: a safety valve against localStorage being cleared. No import path yet, by design. ---
+// --- JSON export: a safety valve against localStorage being cleared. Import lives in js/archive.js. ---
 function sanitizeFilename(str) {
   return String(str).trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'untitled';
 }
