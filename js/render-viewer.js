@@ -171,7 +171,7 @@ function renderScoreboard() {
 // already reads other state fields — no separate parameter needed. No
 // dynamic "Player" text exists in this builder's output today (bracket cards
 // show names directly, no table header), so there's nothing to wire up yet.
-function buildBracketHtml(state, collapseMap) {
+function buildBracketHtml(state, collapseMap, follow) {
   var html = '';
   var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
   // Local per-bracket round counters for double-elimination's own column
@@ -226,9 +226,14 @@ function buildBracketHtml(state, collapseMap) {
     // for collapsing, not even manually).
     var isCollapsible = collapseMap && collapseMap.hasOwnProperty(ri);
     var isCollapsed = isCollapsible && collapseMap[ri];
+    // Emitted regardless of collapsed state — the whole point is to mark a
+    // COLLAPSED round that contains the followed unit (the organiser chose
+    // "indicator only": following someone never changes collapse state on
+    // their behalf, so this class is how a collapsed round says "click me").
+    var hasFollowed = follow && follow.rounds[ri];
 
-    html += `<div class="bracket-round-col${isCollapsed?' is-collapsed':''}">
-      <div class="bracket-round-hdr${isCurrent?' current-hdr':''}${hdrAccentCls}${isCollapsible?' collapsible':''}${isCollapsed?' is-collapsed':''}"${isCollapsible?` onclick="toggleBracketCollapse(${ri})"`:''}>${isCollapsible?'<span class="bracket-collapse-chevron">▸</span>':''}${rLabel}</div>`;
+    html += `<div class="bracket-round-col${isCollapsed?' is-collapsed':''}" data-ri="${ri}">
+      <div class="bracket-round-hdr${isCurrent?' current-hdr':''}${hdrAccentCls}${isCollapsible?' collapsible':''}${isCollapsed?' is-collapsed':''}${hasFollowed?' has-followed':''}"${isCollapsible?` onclick="toggleBracketCollapse(${ri})"`:''}>${isCollapsible?'<span class="bracket-collapse-chevron">▸</span>':''}${rLabel}</div>`;
 
     if (isCollapsed) { html += '</div>'; return; }
 
@@ -264,9 +269,10 @@ function buildBracketHtml(state, collapseMap) {
           // here but did actually advance via this mechanism.
           var cls = showResults ? (isLL ? 'lucky' : adv ? 'adv' : 'elim') : '';
           var tbBadge = showResults && isTB ? ' <span class="bracket-tb-badge" title="Tie-break resolved this round">⚖ TB</span>' : '';
+          var followedCls = follow && follow.key === p.name ? ' is-followed' : '';
           if (teamSize) {
             var info = unitDisplay(state, p.name);
-            html += `<div class="bracket-team-row ${cls}">
+            html += `<div class="bracket-team-row ${cls}${followedCls}">
               <div class="bracket-team-line1">
                 <span class="bracket-team-name">${showResults && isLL ? '★ ' : ''}${esc(info.label)}${tbBadge}</span>
                 ${showResults ? `<span class="bracket-score">${p.score}</span>` : ''}
@@ -274,7 +280,7 @@ function buildBracketHtml(state, collapseMap) {
               <div class="bracket-team-members">${markedMemberNames(state, p.name, ri, info.members || []).join(', ')}</div>
             </div>`;
           } else {
-            html += `<div class="bracket-player-row ${cls}">
+            html += `<div class="bracket-player-row ${cls}${followedCls}">
               <span>${showResults && isLL ? '★ ' : ''}${renderUnitCell(state, p.name, false)}${tbBadge}</span>
               ${showResults ? `<span class="bracket-score">${p.score}</span>` : ''}
             </div>`;
@@ -287,7 +293,8 @@ function buildBracketHtml(state, collapseMap) {
       // after all of this round's real rooms.
       if (state.byes && state.byes[ri] && state.byes[ri].length) {
         state.byes[ri].forEach(function (byeUnit) {
-          html += `<div class="bracket-bye-card"><span class="bracket-bye-label">BYE</span>${esc(unitDisplay(state, byeUnit).label)}</div>`;
+          var byeFollowedCls = follow && follow.key === byeUnit ? ' is-followed' : '';
+          html += `<div class="bracket-bye-card${byeFollowedCls}"><span class="bracket-bye-label">BYE</span>${esc(unitDisplay(state, byeUnit).label)}</div>`;
         });
       }
     }
@@ -322,19 +329,146 @@ function toggleBracketCollapse(ri) {
   renderBracket();
 }
 
-// No separate mode parameter needed here — buildBracketHtml(state) already
-// takes the full state object, which now carries gameFormat/scheduleLogic/
-// gamemodeConfig alongside everything else, live T included.
-function renderBracket() {
+// "Follow a player" — per-browser, localStorage-backed (unlike
+// bracketCollapseOverride above, losing this on reload is a real cost for a
+// returning viewer, matching ADMIN_UNLOCKED_KEY's reasoning). Stores the
+// RESOLVED roster key (a player name, or a team's teamId), never the raw
+// typed text, so a roster change degrades gracefully — the banner just says
+// "not in this bracket" — rather than resolving to the wrong unit. Cleared
+// in proceedReset() but deliberately NOT in proceedGenerateSchedule(): who
+// you like to follow reasonably survives regenerating the same tournament
+// for the same friend group, unlike collapse state which is tied to one
+// specific round structure. This intentionally still writes in viewer mode
+// (SYNC_IS_VIEWER) — it never touches T and never reaches pushSyncUpdate(),
+// so there's no risk of a viewer clobbering the organiser's real state.
+var BRACKET_FOLLOW_KEY = 'curveFFA_bracket_follow';
+function getFollowedUnit() {
+  try { return localStorage.getItem(BRACKET_FOLLOW_KEY) || null; } catch (e) { return null; }
+}
+function setFollowedUnit(key) {
+  try { key ? localStorage.setItem(BRACKET_FOLLOW_KEY, key) : localStorage.removeItem(BRACKET_FOLLOW_KEY); } catch (e) {}
+}
+function clearFollow() {
+  setFollowedUnit(null);
+  var el = document.getElementById('br-follow-input');
+  if (el) el.value = '';
+  if (T.rounds.length) renderBracket();
+}
+
+// One pass over every round's assignments for a single followed key — NOT
+// folded into buildBracketHtml()'s own per-round loop, deliberately: this
+// needs to be known BEFORE the round-column loop runs (a collapsed round's
+// "has-followed" indicator is decided at the same time collapseMap is
+// built), and keeping buildBracketHtml a pure function of its inputs is what
+// lets Archive keep calling buildBracketHtml(snap) with no follow argument
+// at all and never show any highlighting. "Eliminated" uses the exact same
+// rule renderPlayers()/computeRankings() already use (lastAssignedRound) so
+// it means one consistent thing everywhere in the app.
+function bracketFollowStatus(state, key) {
+  if (!key) return null;
+  var rounds = {};
+  var lastRi = -1, lastRoom = null, lastIsBye = false, found = false;
+  state.assignments.forEach(function (asgn, ri) {
+    var entry = (asgn || []).find(function (a) { return a.name === key; });
+    var isBye = !entry && state.byes && state.byes[ri] && state.byes[ri].indexOf(key) !== -1;
+    if (!entry && !isBye) return;
+    found = true;
+    var room = entry ? entry.room : null;
+    rounds[ri] = { room: room, isBye: isBye || room === null };
+    lastRi = ri; lastRoom = room; lastIsBye = isBye || room === null;
+  });
+  if (!found) return null;
+  return {
+    key: key, rounds: rounds, lastRi: lastRi, room: lastRoom, isBye: lastIsBye,
+    eliminated: lastRi < lastAssignedRound(state)
+  };
+}
+
+// Matches renderPlayers()'s existing round-name logic (js/render-viewer.js,
+// "PLAYERS & RANKINGS" section) rather than buildBracketHtml's own WB/LB/GF
+// counters — deliberately simpler. Double-elimination's WB/LB/GF-specific
+// labels are NOT reproduced here, so this banner can say "Round 4" for a
+// column the Bracket tab itself labels "LB Round 2" — a known, cosmetic-only
+// mismatch in that one schedule logic, accepted to avoid extracting a
+// shared label helper as part of this feature (the highlight itself is
+// unaffected either way). See HANDOFF_LOG.md.
+function bracketRoundName(round) {
+  return round.isFinal ? 'Final' : round.isSemis ? 'Semis' : 'Round ' + round.roundNum;
+}
+
+function buildFollowBannerHtml(state, follow) {
+  var key = getFollowedUnit();
+  if (!key) return '';
+  if (!follow) {
+    return `<div class="bracket-follow-pill is-out"><strong>Following ${esc(unitDisplay(state, key).label)}</strong> — not in this bracket</div>`;
+  }
+  var label = esc(unitDisplay(state, key).label);
+  var round = state.rounds[follow.lastRi];
+  var roundName = bracketRoundName(round);
+  var whereHtml;
+  if (follow.eliminated) {
+    whereHtml = `out in ${roundName}`;
+  } else if (follow.isBye) {
+    whereHtml = `${roundName} · BYE, advances automatically`;
+  } else {
+    whereHtml = `${roundName} · Room ${roomLabel(follow.room)}`;
+  }
+  return `<div class="bracket-follow-pill${follow.eliminated ? ' is-out' : ''}"><strong>Following ${label}</strong> — ${whereHtml}` +
+    `<button type="button" class="bracket-follow-clear" onclick="clearFollow()" title="Stop following">✕</button></div>`;
+}
+
+// Only sets the input's value when it's safe to do so — an in-progress
+// partial query the viewer is still typing must never be overwritten, and a
+// focused input should never have its caret position disturbed underneath
+// the viewer's fingers.
+function syncFollowInputValue(follow) {
+  var el = document.getElementById('br-follow-input');
+  if (!el || document.activeElement === el || el.value) return;
+  var key = getFollowedUnit();
+  if (key) el.value = unitDisplay(T, key).label;
+}
+
+var bracketFollowDebounce = null;
+function followInputChanged() {
+  var input = document.getElementById('br-follow-input');
+  var key = resolveUnitQuery(T, input ? input.value : '');
+  var changed = key !== getFollowedUnit();
+  setFollowedUnit(key);
+  clearTimeout(bracketFollowDebounce);
+  bracketFollowDebounce = setTimeout(function () { renderBracket(changed); }, 120);
+}
+
+// Direct scrollLeft math, not scrollIntoView() — scrollIntoView() on a
+// horizontally-scrolling child also scrolls the page vertically, which is
+// not wanted here. Centred rather than left-aligned so the neighbouring
+// rounds (who they just beat, who they play next) stay in view too.
+function scrollBracketToFollowed(follow) {
+  var sc = document.getElementById('br-rounds');
+  var col = sc && sc.querySelector('.bracket-round-col[data-ri="' + follow.lastRi + '"]');
+  if (!sc || !col) return;
+  sc.scrollTo({ left: Math.max(0, col.offsetLeft - (sc.clientWidth - col.offsetWidth) / 2), behavior: 'smooth' });
+}
+
+// scrollToFollowed is opt-in and defaults to falsy — every existing caller
+// (switchTab, both 5s pollers, both sync paths) calls this with no
+// arguments and never auto-scrolls; only followInputChanged() (and
+// switchTab(), on purpose, landing on Bracket) passes true, and only when
+// the resolved followed key actually changed. This is what stops the
+// feature from fighting a viewer who's deliberately scrolled elsewhere.
+function renderBracket(scrollToFollowed) {
   if (!T.rounds.length) return;
   document.getElementById('br-empty').style.display = 'none';
   document.getElementById('br-content').style.display = 'block';
+  var follow = bracketFollowStatus(T, getFollowedUnit());
   // Only past rounds ever get a collapseMap entry — current/future rounds
   // are structurally incapable of collapsing, not just collapsed=false by
   // default (see buildBracketHtml's isCollapsible check).
   var collapseMap = {};
   for (var ri = 0; ri < T.curRound; ri++) collapseMap[ri] = isBracketRoundCollapsed(ri, T);
-  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap);
+  document.getElementById('br-follow-banner').innerHTML = buildFollowBannerHtml(T, follow);
+  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap, follow);
+  syncFollowInputValue(follow);
+  if (scrollToFollowed && follow) scrollBracketToFollowed(follow);
 }
 
 // ═══════════════════════════════════════════════════════════════

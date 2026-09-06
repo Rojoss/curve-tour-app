@@ -215,6 +215,31 @@ function unitDisplay(state, key) {
   return { label: t.teamName, members: (t.members || []).filter(Boolean).map(function (m) { return m.name; }) };
 }
 
+// The inverse of unitDisplay(): given free-typed text, finds the roster key
+// (a player name, or a team's teamId) it identifies — for individual formats
+// the label IS the key, so unitDisplay's forward lookup format-agnostically
+// covers both cases with no separate team/individual branch here. A team
+// resolves by its team name OR any one member's name (Bracket's "Follow a
+// player" feature — following a teammate should work the same as following
+// the team itself). Reserves are included on purpose: following an unseeded
+// reserve is valid, it just shows a "not in this bracket yet" state.
+// Exact matches win over substring matches so e.g. "Al" doesn't get
+// shadowed by "Alex" when both are on the roster.
+function resolveUnitQuery(state, query) {
+  var q = (query || '').trim().toLowerCase();
+  if (!q) return null;
+  var keys = rosterKeys(state.players).concat(rosterKeys(state.reserves));
+  var candidates = keys.map(function (key) { return { key: key, info: unitDisplay(state, key) }; });
+  var exactLabel = candidates.find(function (c) { return c.info.label.toLowerCase() === q; });
+  if (exactLabel) return exactLabel.key;
+  var exactMember = candidates.find(function (c) { return c.info.members && c.info.members.some(function (m) { return m.toLowerCase() === q; }); });
+  if (exactMember) return exactMember.key;
+  var subLabel = candidates.find(function (c) { return c.info.label.toLowerCase().indexOf(q) !== -1; });
+  if (subLabel) return subLabel.key;
+  var subMember = candidates.find(function (c) { return c.info.members && c.info.members.some(function (m) { return m.toLowerCase().indexOf(q) !== -1; }); });
+  return subMember ? subMember.key : null;
+}
+
 // Builds one escaped, defender-marked HTML snippet per member name — shared
 // by renderUnitCell() and Bracket's team-row builder so the marking logic
 // (and its amber/🛡 styling) lives in exactly one place. Matches by NAME,

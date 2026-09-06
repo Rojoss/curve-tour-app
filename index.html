@@ -154,6 +154,17 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .p-status{margin-left:auto}
 
 /* Bracket overview */
+/* "Follow a player" search bar — sits above the legend/scroller. The input
+   needs an explicit max-width since the global input[type=text] rule below
+   is width:100% (same reason #pl-search carries one inline). */
+.bracket-follow-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+#br-follow-input{max-width:260px;flex-shrink:0}
+.bracket-follow-pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;background:var(--cyan-dim);border:1px solid var(--border);border-radius:20px;padding:4px 6px 4px 12px}
+.bracket-follow-pill strong{color:var(--cyan)}
+.bracket-follow-pill.is-out{background:#FF4D6A18}
+.bracket-follow-pill.is-out strong{color:var(--muted)}
+.bracket-follow-clear{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px 6px;border-radius:50%;font-family:var(--font-u)}
+.bracket-follow-clear:hover{color:var(--text);background:var(--surface2)}
 .bracket-scroll{display:flex;gap:16px;overflow-x:auto;padding-bottom:12px}
 .bracket-round-col{width:200px;min-width:200px;flex-shrink:0;transition:width .18s ease,min-width .18s ease}
 .bracket-round-col.is-collapsed{width:34px;min-width:34px}
@@ -174,6 +185,12 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-round-hdr.collapsible:not(.is-collapsed) .bracket-collapse-chevron{transform:rotate(90deg)}
 .bracket-round-col.is-collapsed .bracket-round-hdr{writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;height:180px;margin-bottom:0;padding:8px 0 8px 2px}
 .bracket-round-col.is-collapsed .bracket-round-hdr .bracket-collapse-chevron{writing-mode:horizontal-tb;transform:rotate(180deg)}
+/* "Follow a player" indicator on a round header — see toggleBracketCollapse
+   and buildFollowBannerHtml (js/render-viewer.js). Deliberately only ever a
+   colour change: following someone never changes collapse state itself
+   (organiser's choice — "indicator only", not auto-expand). */
+.bracket-round-hdr.has-followed{color:var(--cyan)}
+.bracket-round-hdr.has-followed .bracket-collapse-chevron{color:var(--cyan)}
 
 /* Room grouping — a plain label + a left-border colour accent per row
    instead of a boxed card per room (same accent pattern already used for
@@ -185,6 +202,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-player-row.adv{border-left-color:var(--green);color:var(--green)}
 .bracket-player-row.elim{border-left-color:var(--border);color:var(--muted);text-decoration:line-through;opacity:.5}
 .bracket-player-row.lucky{border-left-color:var(--purple);color:var(--purple)}
+/* "Follow a player" row highlight — background + inset ring, deliberately
+   NEVER border-left-color: the left border already carries the adv/elim/
+   lucky result signal, so overriding it here would destroy that instead of
+   adding to it. #00E5FF44 matches the raw-alpha convention already used a
+   few lines down for .bracket-tb-badge's #FFB83022. */
+.bracket-player-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44;border-radius:0 6px 6px 0}
+.bracket-player-row.elim.is-followed{opacity:.75}
 .bracket-score{margin-left:auto;font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--muted)}
 .bracket-tb-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--amber);background:#FFB83022;padding:1px 5px;border-radius:8px;margin-left:2px;vertical-align:middle}
 
@@ -205,12 +229,22 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-team-row.elim .bracket-team-name{color:var(--muted);text-decoration:line-through;opacity:.5}
 .bracket-team-row.lucky .bracket-team-name{color:var(--purple)}
 .bracket-team-members{color:var(--muted);font-size:11px;margin-top:2px;white-space:normal;overflow-wrap:anywhere}
+/* "Follow a player" — same treatment as .bracket-player-row.is-followed
+   above; the background covers the whole two-line block (line1 + members)
+   with no extra rules needed, and resolving by a member's name still
+   highlights the whole team, not just that member's name individually. */
+.bracket-team-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44;border-radius:0 6px 6px 0}
+.bracket-team-row.elim.is-followed{opacity:.75}
 
 /* Bracket bye card ("Bye" odd-count strategy) — a round's bye recipient
    doesn't belong to any room, so it gets its own small card instead of a row
    inside a .bracket-room-group, rendered after that round's real rooms. */
 .bracket-bye-card{background:var(--surface);border:1px dashed var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--amber)}
 .bracket-bye-label{font-family:var(--font-d);font-weight:700;letter-spacing:.5px;margin-right:6px}
+/* A followed unit on a bye never appears in the room loop (room:null is
+   filtered out there) — without this, following someone would silently lose
+   its highlight on any round they received a bye. */
+.bracket-bye-card.is-followed{border-style:solid;box-shadow:0 0 0 1px #00E5FF44}
 
 /* Scoreboard bye card — same "distinct card, no room table" treatment as
    Bracket's, sized to sit alongside the room-block grid it's rendered into. */
@@ -435,6 +469,10 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <div class="view active" id="view-bracket">
   <div id="br-empty" class="msg msg-info">Start a tournament in Admin to see the bracket overview.</div>
   <div id="br-content" style="display:none">
+    <div class="bracket-follow-bar">
+      <input type="text" id="br-follow-input" placeholder="Follow a player…" oninput="followInputChanged()" autocomplete="off">
+      <div id="br-follow-banner"></div>
+    </div>
     <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament bracket — green = advanced, grey = eliminated, purple = lucky loser. Current round highlighted.</p>
     <div class="bracket-scroll" id="br-rounds"></div>
   </div>

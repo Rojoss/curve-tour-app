@@ -209,7 +209,11 @@ function switchTab(id, btn) {
   document.getElementById('view-' + id).classList.add('active');
   btn.classList.add('active');
   if (id === 'scoreboard') renderScoreboard();
-  if (id === 'bracket')    renderBracket();
+  // true = auto-scroll to a followed player, if one is set — landing on
+  // Bracket should show "where am I right now" with zero clicks, matching
+  // the convenience criterion in "Design intent for viewer-facing tabs"
+  // (HANDOFF.md). Every other renderBracket() call site stays zero-arg.
+  if (id === 'bracket')    renderBracket(true);
   if (id === 'players')    renderPlayers();
   if (id === 'rankings')   renderRankings();
   if (id === 'archive')    renderArchiveList();
@@ -406,6 +410,12 @@ function proceedReset() {
   // any stale override structurally inert, since every round becomes
   // "future" again, but a hygienic clean slate is worth doing anyway).
   if (typeof bracketCollapseOverride !== 'undefined') bracketCollapseOverride = {};
+  // Bracket's "Follow a player" choice (js/render-viewer.js) — cleared on a
+  // full reset (clearFollow() also blanks the visible input box), but
+  // deliberately NOT in proceedGenerateSchedule(): unlike collapse state
+  // (tied to one round structure), the same friend group across several
+  // generations should keep whoever they like to follow.
+  if (typeof clearFollow === 'function') clearFollow();
   document.getElementById('panel-setup').style.display = 'block';
   document.getElementById('panel-running').style.display = 'none';
   document.getElementById('preview-wrap').style.display = 'none';
