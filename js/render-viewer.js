@@ -171,7 +171,7 @@ function renderScoreboard() {
 // already reads other state fields — no separate parameter needed. No
 // dynamic "Player" text exists in this builder's output today (bracket cards
 // show names directly, no table header), so there's nothing to wire up yet.
-function buildBracketHtml(state, collapseMap, follow) {
+function buildBracketHtml(state, collapseMap, follow, editable) {
   var html = '';
   var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
   // Local per-bracket round counters for double-elimination's own column
@@ -183,6 +183,11 @@ function buildBracketHtml(state, collapseMap, follow) {
   state.rounds.forEach((round, ri) => {
     var asgn = state.assignments[ri] || [];
     var isCurrent = ri === state.curRound;
+    // "editable" says the current round qualifies for score entry at all
+    // (isAdminUnlocked() + started + Mechanism-A check — see
+    // bracketScoreEntryAllowed()); isCurrent confines it to this one column,
+    // matching Admin's own "only the round being played" boundary.
+    var rowsEditable = !!editable && isCurrent;
     var isPast    = ri < state.curRound;
     // Lucky-loser record for round ri's OWN card: T.luckyLosers[ri+1] is
     // written by advanceRound() for the round arrived INTO — i.e. it's the
@@ -249,7 +254,12 @@ function buildBracketHtml(state, collapseMap, follow) {
         var roomHeading = round.isGroupStage ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm) : 'Room ' + roomLabel(rm);
         html += `<div class="bracket-room-group"><div class="bracket-room-label">${roomHeading}</div>`;
 
-        var scoredList = players.map((p, pi) => ({ name: p.name, score: getUnitScore(state, ri, rm, pi, null) }));
+        // pi is kept on each entry (not just used inline) because orderRoomByScore()
+        // below re-sorts this array the instant the room completes — after that,
+        // array position no longer matches room position, so a correct score-input
+        // data-key (§ score entry) has no other way to recover which room slot an
+        // entry actually belongs to. Looks unused in the read-only path; isn't.
+        var scoredList = players.map((p, pi) => ({ name: p.name, score: getUnitScore(state, ri, rm, pi, null), pi: pi }));
         // Only reveal a room's scores/outcome once every player in it has a
         // score entered — a partially-scored room shows exactly as it did
         // before any scores existed (plain list, no colours, no numbers).
@@ -270,19 +280,51 @@ function buildBracketHtml(state, collapseMap, follow) {
           var cls = showResults ? (isLL ? 'lucky' : adv ? 'adv' : 'elim') : '';
           var tbBadge = showResults && isTB ? ' <span class="bracket-tb-badge" title="Tie-break resolved this round">⚖ TB</span>' : '';
           var followedCls = follow && follow.key === p.name ? ' is-followed' : '';
+          var editableCls = rowsEditable ? ' is-editable' : '';
+          var scoreKey = `r${ri}-rm${rm}-p${p.pi}`;
           if (teamSize) {
             var info = unitDisplay(state, p.name);
-            html += `<div class="bracket-team-row ${cls}${followedCls}">
+            var scoreCellsHtml = '';
+            if (rowsEditable) {
+              // Index the RAW team.members array, never info.members (from
+              // unitDisplay) — info.members is filter(Boolean)-compacted, so
+              // with a vacant slot its indices no longer match the -m{mi} key
+              // space getUnitScore()/Admin's renderRooms() both use. Indexing
+              // the wrong array would silently write a score under the wrong
+              // member's key.
+              var team = teamMap(state)[p.name];
+              var rawMembers = (team && team.members) || [];
+              var cells = [];
+              for (var mi = 0; mi < teamSize; mi++) {
+                var member = rawMembers[mi];
+                if (!member) { cells.push(`<label class="br-m-vacant" title="Vacant slot"><input type="number" class="score-inp" disabled placeholder="—"></label>`); continue; }
+                var mkey = `${scoreKey}-m${mi}`;
+                var mraw = state.scores[mkey];
+                var mval = (mraw !== undefined && mraw !== null) ? mraw : '';
+                cells.push(`<label><span>${esc(member.name)}</span><input type="number" class="score-inp" value="${mval}" min="0" data-key="${mkey}" data-rm="${rm}" data-ri="${ri}" oninput="bracketScoreChanged(this)"></label>`);
+              }
+              scoreCellsHtml = `<div class="bracket-team-scores">${cells.join('')}</div>`;
+            }
+            html += `<div class="bracket-team-row ${cls}${followedCls}${editableCls}">
               <div class="bracket-team-line1">
                 <span class="bracket-team-name">${showResults && isLL ? '★ ' : ''}${esc(info.label)}${tbBadge}</span>
                 ${showResults ? `<span class="bracket-score">${p.score}</span>` : ''}
               </div>
               <div class="bracket-team-members">${markedMemberNames(state, p.name, ri, info.members || []).join(', ')}</div>
+              ${scoreCellsHtml}
             </div>`;
           } else {
-            html += `<div class="bracket-player-row ${cls}${followedCls}">
+            var indivScoreHtml;
+            if (rowsEditable) {
+              var raw = state.scores[scoreKey];
+              var val = (raw !== undefined && raw !== null) ? raw : '';
+              indivScoreHtml = `<input type="number" class="score-inp" value="${val}" min="0" data-key="${scoreKey}" data-rm="${rm}" data-ri="${ri}" oninput="bracketScoreChanged(this)">`;
+            } else {
+              indivScoreHtml = showResults ? `<span class="bracket-score">${p.score}</span>` : '';
+            }
+            html += `<div class="bracket-player-row ${cls}${followedCls}${editableCls}">
               <span>${showResults && isLL ? '★ ' : ''}${renderUnitCell(state, p.name, false)}${tbBadge}</span>
-              ${showResults ? `<span class="bracket-score">${p.score}</span>` : ''}
+              ${indivScoreHtml}
             </div>`;
           }
         });
@@ -449,6 +491,50 @@ function scrollBracketToFollowed(follow) {
   sc.scrollTo({ left: Math.max(0, col.offsetLeft - (sc.clientWidth - col.offsetWidth) / 2), behavior: 'smooth' });
 }
 
+// Whether Bracket should render live score inputs for the CURRENT round.
+// Three gates beyond isAdminUnlocked():
+//  - state.started: Admin structurally can't score a generated-but-not-yet-
+//    started tournament either (#panel-running stays hidden pre-start) —
+//    matching that boundary, not inventing a new one.
+//  - !SYNC_IS_VIEWER: SYNC_IS_VIEWER is computed once at page LOAD, but
+//    isAdminUnlocked() reads localStorage LIVE and is shared across every
+//    tab of one browser. A tab that opened a ?t= link before being unlocked
+//    keeps SYNC_IS_VIEWER===true even after Admin gets unlocked in a
+//    DIFFERENT tab of the same browser — only promoteViewerToWriter() (in
+//    the tab that actually unlocks) clears it. Without this gate, that
+//    stale-viewer tab would show live inputs whose edits silently vanish:
+//    saveState()/pushSyncUpdate() both no-op for a viewer, and the next
+//    incoming Firebase snapshot hits the viewer listener's blanket
+//    Object.assign(T, payload) (js/sync.js) — unlike the writer path, that
+//    merge has NO dirty-key protection, so the typed score is overwritten
+//    with no error and no indication. This is the same predicate
+//    pushSyncUpdate() itself already gates on.
+//  - Mechanism A vs B: byte-identical to js/render-admin.js's own routing
+//    condition — a Final with numGames>1, or ANY double-elimination grand
+//    final (bracket==='grand-final', even before numGames ever exceeds 1),
+//    uses a completely different multi-game/race UI (T.finalScores,
+//    finalScoreChanged()) that this build doesn't support — Bracket stays
+//    fully read-only for that round, exactly as it renders today.
+function bracketScoreEntryAllowed(state) {
+  if (!state.started) return false;
+  if (!isAdminUnlocked()) return false;
+  if (typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER) return false;
+  var round = state.rounds[state.curRound];
+  if (!round) return false;
+  if (round.isFinal && (round.numGames > 1 || round.bracket === 'grand-final')) return false;
+  return true;
+}
+
+// Bracket score-input focus guard — own mechanism, deliberately separate
+// from Admin's adminRenderPending (js/render-admin.js): they guard different
+// render functions and can never both be pending at once (exactly one tab
+// is ever active), so unifying them would need a "which view" discriminator
+// for no behavioural gain. Reuses isScoreInputFocused() as-is (a plain,
+// view-agnostic global — just checks document.activeElement) rather than
+// duplicating it.
+var bracketRenderPending = false;
+var bracketRenderPendingScroll = false; // preserve a scrollToFollowed signal across a deferral
+
 // scrollToFollowed is opt-in and defaults to falsy — every existing caller
 // (switchTab, both 5s pollers, both sync paths) calls this with no
 // arguments and never auto-scrolls; only followInputChanged() (and
@@ -456,6 +542,33 @@ function scrollBracketToFollowed(follow) {
 // the resolved followed key actually changed. This is what stops the
 // feature from fighting a viewer who's deliberately scrolled elsewhere.
 function renderBracket(scrollToFollowed) {
+  if (isScoreInputFocused()) {
+    bracketRenderPending = true;
+    bracketRenderPendingScroll = bracketRenderPendingScroll || !!scrollToFollowed;
+    return;
+  }
+  bracketRenderPending = false;
+  var s = bracketRenderPendingScroll || scrollToFollowed;
+  bracketRenderPendingScroll = false;
+  renderBracketNow(s);
+}
+
+document.addEventListener('focusout', function (e) {
+  if (!bracketRenderPending) return;
+  if (!e.target || !e.target.classList || !e.target.classList.contains('score-inp')) return;
+  setTimeout(function () {
+    // One tick later, same reason as Admin's identical guard: Tab-navigation
+    // between two score inputs (blur old, focus new) shouldn't trigger a
+    // spurious mid-navigation repaint.
+    if (bracketRenderPending && !isScoreInputFocused()) {
+      bracketRenderPending = false;
+      var s = bracketRenderPendingScroll; bracketRenderPendingScroll = false;
+      renderBracketNow(s);
+    }
+  }, 0);
+});
+
+function renderBracketNow(scrollToFollowed) {
   if (!T.rounds.length) return;
   document.getElementById('br-empty').style.display = 'none';
   document.getElementById('br-content').style.display = 'block';
@@ -466,9 +579,21 @@ function renderBracket(scrollToFollowed) {
   var collapseMap = {};
   for (var ri = 0; ri < T.curRound; ri++) collapseMap[ri] = isBracketRoundCollapsed(ri, T);
   document.getElementById('br-follow-banner').innerHTML = buildFollowBannerHtml(T, follow);
-  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap, follow);
+  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap, follow, bracketScoreEntryAllowed(T));
   syncFollowInputValue(follow);
   if (scrollToFollowed && follow) scrollBracketToFollowed(follow);
+}
+
+// scoreChanged() (js/render-admin.js) was written for Admin's own re-render
+// path and never triggers a Bracket repaint on its own — otherwise it's
+// confirmed safe to call verbatim regardless of which tab is active:
+// recalcRoom()'s per-row DOM lookups are all `if (!rowEl) return;` guarded,
+// #tie-banner-wrap is a static always-present element, and the Next-round
+// button lookup is null-guarded. Do NOT reimplement or extract scoreChanged()
+// — call it as-is.
+function bracketScoreChanged(input) {
+  scoreChanged(input);
+  renderBracket(); // focus-guarded — defers until the admin is done typing/tabbing
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -236,6 +236,24 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-team-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44;border-radius:0 6px 6px 0}
 .bracket-team-row.elim.is-followed{opacity:.75}
 
+/* Score entry from Bracket (admin-unlocked, current round only — see
+   bracketScoreEntryAllowed() in js/render-viewer.js). Deliberately the SAME
+   .score-inp class Admin's own room table uses (scoreChanged()/
+   isScoreInputFocused() stay unified across both) — only sizing is
+   overridden here, scoped by ancestor selector so Admin's own spacious
+   90px/18px styling (input[type=number].score-inp, near the top of this
+   file) is completely untouched. */
+.bracket-player-row input[type=number].score-inp,
+.bracket-team-scores input[type=number].score-inp{width:52px;font-size:12px;font-weight:700;padding:2px 5px;border-radius:4px;flex:0 0 auto}
+.bracket-player-row input[type=number].score-inp{margin-left:auto}
+.bracket-team-scores{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.bracket-team-scores label{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.bracket-team-scores input:disabled{opacity:.4;cursor:not-allowed}
+/* An eliminated row's opacity:.5 would dim a still-editable input to
+   illegibility — same problem, same fix as .bracket-player-row.elim.is-followed
+   above (a parent's opacity can't be selectively un-applied to one child). */
+.bracket-player-row.elim.is-editable,.bracket-team-row.elim.is-editable{opacity:.8}
+
 /* Bracket bye card ("Bye" odd-count strategy) — a round's bye recipient
    doesn't belong to any room, so it gets its own small card instead of a row
    inside a .bracket-room-group, rendered after that round's real rooms. */
