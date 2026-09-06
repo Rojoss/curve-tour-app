@@ -543,20 +543,10 @@ function statEl(lbl, val, cls) {
   return `<div class="sstat"><div class="lbl">${lbl}</div><div class="val ${cls||''}">${val}</div></div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  AUTO-REFRESH — Scoreboard and Bracket poll the same in-memory
-//  state every 5s so viewers don't need to manually switch tabs to
-//  see updates. Only whichever of those two tabs is currently active
-//  gets re-rendered (Admin, Players, Rankings are untouched here —
-//  Players/Rankings still only refresh on tab visit). Reads T
-//  directly, same as every other render call — no separate polling
-//  or storage reads, and no saveState() call, since nothing changes.
-// ═══════════════════════════════════════════════════════════════
-setInterval(function() {
-  var activeTab = getActiveTab();
-  if (activeTab === 'scoreboard') renderScoreboard();
-  else if (activeTab === 'bracket') renderBracket();
-}, 5000);
+// Auto-refresh interval lives in js/render-viewer.js, not here — this was a
+// byte-identical duplicate left over from the "Split into multiple files"
+// refactor (both fired every 5s, doubling every Scoreboard/Bracket
+// re-render for no reason). Removed 2026-09-06.
 
 // Init (restoring any saved tournament from this browser) happens from
 // index.html's own trailing inline <script>, after every js/*.js file has
