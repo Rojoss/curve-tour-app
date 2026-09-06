@@ -989,6 +989,66 @@ function checkGrandFinalRace() {
   return true;
 }
 
+// Per-round Finals progress, for Bracket's compact history+next-game display
+// (js/render-viewer.js's buildFinalColumnHtml()). Neither existing helper
+// gives this: computeRankings() only exposes a whole-tournament boolean
+// (finalComplete), and computeGrandFinalRaceState() only covers the
+// grand-final case. Pure function of state — safe against live T or an
+// archived snapshot, no DOM.
+//
+// "complete" for a grand final comes from race.decided, NEVER from "every
+// opened game is scored" — those differ (an opened, fully-scored game with
+// nobody at target means the race continues and numGames grows next). For a
+// plain multi-game Final, "complete" means every finalist scored in every
+// game, matching computeRankings()'s own rule for that case.
+function finalsProgressState(state, ri, round) {
+  var asgn = state.assignments[ri] || [];
+  var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
+  var race = round.bracket === 'grand-final' ? computeGrandFinalRaceState(state, ri, round) : null;
+
+  var units = asgn.map(function (p) {
+    var perGame = [];
+    for (var g = 1; g <= round.numGames; g++) perGame.push(getFinalUnitScore(state, p.name, g, null));
+    var total = 0;
+    for (var g2 = 1; g2 <= round.numGames; g2++) total += getFinalUnitScore(state, p.name, g2, 0);
+    var wins = 0;
+    if (race) {
+      for (var g3 = 1; g3 <= race.gamesPlayed; g3++) {
+        var mine = getFinalUnitScore(state, p.name, g3, null);
+        var otherName = p.name === race.wbName ? race.lbName : race.wbName;
+        var other = getFinalUnitScore(state, otherName, g3, null);
+        if (mine !== null && other !== null && mine > other) wins++;
+      }
+    }
+    return { name: p.name, perGame: perGame, total: total, wins: wins };
+  });
+
+  var gameComplete = [];
+  for (var g4 = 1; g4 <= round.numGames; g4++) {
+    gameComplete.push(asgn.length > 0 && asgn.every(function (p) { return getFinalUnitScore(state, p.name, g4, null) !== null; }));
+  }
+  var complete = race ? !!race.decided : (asgn.length > 0 && gameComplete.length > 0 && gameComplete.every(Boolean));
+  var nextGame = null;
+  if (!complete) {
+    for (var g5 = 0; g5 < gameComplete.length; g5++) { if (!gameComplete[g5]) { nextGame = g5 + 1; break; } }
+  }
+
+  var order;
+  if (complete && race) {
+    var loserName = race.winnerName === race.wbName ? race.lbName : race.wbName;
+    order = [race.winnerName, loserName]; // NEVER a win-count sort — see computeRankings()'s
+                                            // own comment: asymmetric targets mean the winner's
+                                            // raw win count can legitimately be lower.
+  } else if (complete) {
+    order = units.slice().sort(function (a, b) { return b.total - a.total; }).map(function (u) { return u.name; });
+  } else {
+    order = asgn.map(function (p) { return p.name; });
+  }
+
+  return { isGrandFinal: !!race, numGames: round.numGames, units: units, gameComplete: gameComplete,
+    nextGame: nextGame, complete: complete, order: order, race: race };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // PLAYERS & RANKINGS — Rankings. computeRankings/buildRankingsRows below
 //  are SHARED pure builders (also used by Archive's read-only detail

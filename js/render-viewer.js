@@ -245,6 +245,17 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     if (!asgn.length) {
       html += `<div style="color:var(--muted);font-size:12px;padding:8px">Not yet seeded</div>`;
     } else {
+      // Byte-identical to renderAdminRound()'s own routing condition
+      // (js/render-admin.js) and to bracketScoreEntryAllowed()'s Mechanism-A/B
+      // check — a Final with numGames>1, or ANY double-elimination grand
+      // final, uses T.finalScores/finalScoreChanged(), not T.scores — a
+      // completely different data shape the room loop below can't read at
+      // all (a Final round has no T.scores entries, ever). A plain
+      // single-game Final falls through to the normal room loop unchanged.
+      var isFinalMulti = round.isFinal && (round.numGames > 1 || round.bracket === 'grand-final');
+      if (isFinalMulti) {
+        html += buildFinalColumnHtml(state, ri, round, asgn, follow, rowsEditable);
+      } else {
       for (var rm = 1; rm <= round.rooms.length; rm++) {
         var players = asgn.filter(a => a.room === rm);
         var thisAdv = round.isNoElim || round.isFinal ? players.length : round.advPerRoom;
@@ -330,6 +341,7 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
         });
         html += '</div>';
       }
+      } // end isFinalMulti / normal-room-loop branch
       // Bye recipient for this round ("Bye" odd-count strategy) — no room
       // card is generated for them; they get a distinct small card instead,
       // after all of this round's real rooms.
@@ -342,6 +354,119 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     }
     html += '</div>';
   });
+  return html;
+}
+
+// Read+write for a "Mechanism B" Final round (multi-game / grand-final
+// race) — replaces the room loop entirely for this one round, not a patch to
+// it: a Final always has exactly one room (a "Room A" wrapper carries no
+// information here), the per-row payload is N per-game cells + a running
+// total rather than one score, and orderRoomByScore()/pi-based data-keys are
+// both meaningless (Finals scoring has no room/position concept at all, and
+// detectTieBreaks() returns {} unconditionally for round.isFinal, so no
+// ⚖ TB handling is needed either). Pure function of state — Archive's
+// read-only buildBracketHtml(snap) call never passes rowsEditable, so this
+// always renders fully read-only there, same purity discipline as the rest
+// of buildBracketHtml.
+//
+// Only ONE game is ever editable at a time (progress.nextGame) — correcting
+// an already-finished game is Admin-only by design, not an oversight; a
+// hint says so once at least one game is complete.
+function buildFinalColumnHtml(state, ri, round, asgn, follow, rowsEditable) {
+  var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
+  var progress = finalsProgressState(state, ri, round);
+  var html = '';
+
+  if (progress.race) {
+    var race = progress.race;
+    var wbLabel = esc(unitDisplay(state, race.wbName).label);
+    var lbLabel = esc(unitDisplay(state, race.lbName).label);
+    html += `<div class="bracket-final-race">
+      <span class="bfr-side bfr-wb">${wbLabel}</span> <b>${race.wbWins}</b>/${race.wbTarget}
+      <span class="bfr-sep">·</span>
+      <span class="bfr-side bfr-lb">${lbLabel}</span> <b>${race.lbWins}</b>/${race.lbTarget}
+      ${race.decided ? `<span class="bfr-won">🏆 ${esc(unitDisplay(state, race.winnerName).label)} wins</span>` : ''}
+    </div>`;
+  }
+
+  if (rowsEditable && progress.nextGame !== null) {
+    html += `<div class="bracket-final-openlabel">Game ${progress.nextGame} — enter scores</div>`;
+  }
+
+  var orderedNames = progress.complete ? progress.order : asgn.map(function (p) { return p.name; });
+  orderedNames.forEach(function (name, i) {
+    var unit = progress.units.find(function (u) { return u.name === name; });
+    var rank = i + 1;
+    var cls = progress.complete ? 'adv' : '';
+    var isWinner = progress.complete && rank === 1;
+    var followedCls = follow && follow.key === name ? ' is-followed' : '';
+    var editableCls = rowsEditable ? ' is-editable' : '';
+
+    var gamesHtml = unit.perGame.map(function (score, gi) {
+      var g = gi + 1;
+      return score !== null ? `<span class="bfg">G${g} <b>${score}</b></span>` : `<span class="bfg is-pending">G${g} —</span>`;
+    }).join('');
+
+    var totalLabel = progress.isGrandFinal ? unit.wins : unit.total;
+    var totalTitle = progress.isGrandFinal ? 'Games won' : 'Cumulative Final score';
+
+    var nextGameHtml = '';
+    if (rowsEditable && progress.nextGame !== null) {
+      var g = progress.nextGame;
+      if (teamSize) {
+        // Index the RAW team.members array, never unitDisplay().members —
+        // the latter is filter(Boolean)-compacted, so with a vacant slot its
+        // indices no longer match the -m{mi} key space getFinalUnitScore()
+        // uses. Same trap, same fix as the normal-round branch above; note
+        // renderMultiGameFinals() (js/render-admin.js) already does this
+        // correctly, so this mirrors an existing-correct pattern here.
+        var team = teamMap(state)[name];
+        var rawMembers = (team && team.members) || [];
+        var cells = [];
+        for (var mi = 0; mi < teamSize; mi++) {
+          var member = rawMembers[mi];
+          if (!member) { cells.push(`<label class="br-m-vacant" title="Vacant slot"><input type="number" class="score-inp" disabled placeholder="—"></label>`); continue; }
+          var mkey = `game${g}-${name}-m${mi}`;
+          var mraw = state.finalScores[mkey];
+          var mval = (mraw !== undefined && mraw !== null && mraw !== '') ? mraw : '';
+          cells.push(`<label><span>${esc(member.name)}</span><input type="number" class="score-inp" value="${mval}" min="0" data-fkey="${esc(mkey)}" oninput="bracketFinalScoreChanged(this)"></label>`);
+        }
+        nextGameHtml = `<div class="bracket-final-next"><span class="bfn-label">G${g}</span><div class="bracket-team-scores">${cells.join('')}</div></div>`;
+      } else {
+        var fkey = `game${g}-${name}`;
+        var raw = state.finalScores[fkey];
+        var val = (raw !== undefined && raw !== null && raw !== '') ? raw : '';
+        nextGameHtml = `<div class="bracket-final-next"><label><span>G${g}</span><input type="number" class="score-inp" value="${val}" min="0" data-fkey="${esc(fkey)}" oninput="bracketFinalScoreChanged(this)"></label></div>`;
+      }
+    }
+
+    if (teamSize) {
+      var info = unitDisplay(state, name);
+      html += `<div class="bracket-final-row ${cls}${isWinner ? ' is-final-winner' : ''}${followedCls}${editableCls}">
+        <div class="bracket-final-line1">
+          <span class="bracket-final-name">${isWinner ? '🏆 ' : ''}${esc(info.label)}</span>
+          <span class="bracket-final-total" title="${totalTitle}">${totalLabel}</span>
+        </div>
+        <div class="bracket-team-members">${markedMemberNames(state, name, ri, info.members || []).join(', ')}</div>
+        <div class="bracket-final-games">${gamesHtml}</div>
+        ${nextGameHtml}
+      </div>`;
+    } else {
+      html += `<div class="bracket-final-row ${cls}${isWinner ? ' is-final-winner' : ''}${followedCls}${editableCls}">
+        <div class="bracket-final-line1">
+          <span class="bracket-final-name">${isWinner ? '🏆 ' : ''}${renderUnitCell(state, name, false)}</span>
+          <span class="bracket-final-total" title="${totalTitle}">${totalLabel}</span>
+        </div>
+        <div class="bracket-final-games">${gamesHtml}</div>
+        ${nextGameHtml}
+      </div>`;
+    }
+  });
+
+  if (rowsEditable && progress.nextGame !== null && progress.nextGame > 1) {
+    html += `<div class="bracket-final-hint">Earlier games are edited in Admin</div>`;
+  }
+
   return html;
 }
 
@@ -521,7 +646,16 @@ function bracketScoreEntryAllowed(state) {
   if (typeof SYNC_IS_VIEWER !== 'undefined' && SYNC_IS_VIEWER) return false;
   var round = state.rounds[state.curRound];
   if (!round) return false;
-  if (round.isFinal && (round.numGames > 1 || round.bracket === 'grand-final')) return false;
+  // This is now purely the three access gates — it no longer excludes
+  // Mechanism B (Final/grand-final multi-game scoring). WHICH mechanism a
+  // round uses, and whether any game is actually open for entry right now,
+  // is decided inside buildBracketHtml()/buildFinalColumnHtml() from the
+  // round itself (round.isFinal/numGames/bracket, finalsProgressState()'s
+  // nextGame) — not here. A fully-decided Final correctly ends up with
+  // nextGame===null and renders read-only despite this gate still saying
+  // "editable", which is the intended separation: this function answers
+  // "is this admin allowed to edit at all," not "is there anything left to
+  // edit right now."
   return true;
 }
 
@@ -594,6 +728,26 @@ function renderBracketNow(scrollToFollowed) {
 function bracketScoreChanged(input) {
   scoreChanged(input);
   renderBracket(); // focus-guarded — defers until the admin is done typing/tabbing
+}
+
+// Mechanism B's equivalent of bracketScoreChanged() above — but NOT optional
+// the way that one arguably was: finalScoreChanged() (js/render-admin.js)
+// has ZERO DOM effects of its own (unlike scoreChanged(), which drives
+// recalcRoom()/renderTieBanner()), so without this explicit renderBracket()
+// call, Bracket's Finals card would never visibly update — not the history,
+// not the total, not the race progress, not a newly-opened game.
+//
+// On a live-growing grand-final race, the new game appears ON BLUR, not
+// mid-keystroke, and that's correct, not a bug: checkGrandFinalRace() (called
+// inside finalScoreChanged()) mutates round.numGames immediately, then calls
+// renderAdminRound() — itself focus-guarded, so it defers while this input
+// still has focus. The renderBracket() call right below does the same. Both
+// flush on the same focusout tick once focus genuinely leaves every
+// .score-inp, and by then round.numGames has already grown, so the render
+// that finally runs shows the new game immediately — just not before blur.
+function bracketFinalScoreChanged(input) {
+  finalScoreChanged(input);
+  renderBracket();
 }
 
 // ═══════════════════════════════════════════════════════════════
