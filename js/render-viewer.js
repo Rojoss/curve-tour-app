@@ -171,15 +171,35 @@ function renderScoreboard() {
 // already reads other state fields — no separate parameter needed. No
 // dynamic "Player" text exists in this builder's output today (bracket cards
 // show names directly, no table header), so there's nothing to wire up yet.
+// Round column labels ("WB Round 1", "LB Round 2", "⚔ Semis", ...) — one
+// array entry per state.rounds[ri], computed once here rather than inline
+// inside buildBracketHtml()'s own loop, so any OTHER caller needing a
+// round's exact on-screen label (buildFollowBannerHtml() below, previously
+// via the simpler bracketRoundName()) can't drift out of sync with what the
+// column header actually shows. Was previously two separate label
+// derivations — a real, if cosmetic, bug: the Follow banner could say
+// "Round 4" for a round the column itself labelled "LB Round 2". Derived
+// at render time from round.bracket rather than stored per round, same
+// "compute from existing structure" preference as the rest of this app
+// (see "Double elimination" Part 5 in HANDOFF.md).
+function bracketRoundLabels(state) {
+  var wbCounter = 0, lbCounter = 0;
+  return state.rounds.map(function (round) {
+    if (round.bracket === 'winners') { wbCounter++; return { label: 'WB Round ' + wbCounter, hdrAccentCls: ' wb-hdr' }; }
+    if (round.bracket === 'losers') { lbCounter++; return { label: 'LB Round ' + lbCounter, hdrAccentCls: ' lb-hdr' }; }
+    if (round.bracket === 'grand-final') { return { label: '🏆 Grand Final', hdrAccentCls: ' gf-hdr' }; }
+    var label = round.isFinal ? '🏆 Final' : round.isSemis ? '⚔ Semis' :
+             round.isQual ? 'Round '+round.roundNum+' (Qual)' :
+             round.isSwiss ? 'Round '+round.roundNum+' (Swiss)' :
+             round.isGroupStage ? 'Round '+round.roundNum+' (Group)' : 'Round '+round.roundNum;
+    return { label: label, hdrAccentCls: '' };
+  });
+}
+
 function buildBracketHtml(state, collapseMap, follow, editable) {
   var html = '';
   var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
-  // Local per-bracket round counters for double-elimination's own column
-  // labels ("WB Round 1", "LB Round 2", ...) — derived here at render time
-  // from round.bracket rather than stored per round, same "compute from
-  // existing structure" preference as the rest of this app (see "Double
-  // elimination" Part 5 in HANDOFF.md).
-  var wbCounter = 0, lbCounter = 0;
+  var roundLabels = bracketRoundLabels(state);
   state.rounds.forEach((round, ri) => {
     var asgn = state.assignments[ri] || [];
     var isCurrent = ri === state.curRound;
@@ -212,17 +232,8 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
       if (cluster) cluster.players.forEach(p => tbNames.add(p.name));
     });
 
-    var hdrAccentCls = '';
-    var rLabel;
-    if (round.bracket === 'winners') { wbCounter++; rLabel = 'WB Round ' + wbCounter; hdrAccentCls = ' wb-hdr'; }
-    else if (round.bracket === 'losers') { lbCounter++; rLabel = 'LB Round ' + lbCounter; hdrAccentCls = ' lb-hdr'; }
-    else if (round.bracket === 'grand-final') { rLabel = '🏆 Grand Final'; hdrAccentCls = ' gf-hdr'; }
-    else {
-      rLabel = round.isFinal ? '🏆 Final' : round.isSemis ? '⚔ Semis' :
-               round.isQual ? 'Round '+round.roundNum+' (Qual)' :
-               round.isSwiss ? 'Round '+round.roundNum+' (Swiss)' :
-               round.isGroupStage ? 'Round '+round.roundNum+' (Group)' : 'Round '+round.roundNum;
-    }
+    var rLabel = roundLabels[ri].label;
+    var hdrAccentCls = roundLabels[ri].hdrAccentCls;
     // Past rounds only: renderBracket() is the only caller that ever passes
     // a collapseMap, and only ever includes entries for ri < curRound — so a
     // current/future round has no key here at all and gets no collapsible
@@ -551,18 +562,6 @@ function bracketFollowStatus(state, key) {
   };
 }
 
-// Matches renderPlayers()'s existing round-name logic (js/render-viewer.js,
-// "PLAYERS & RANKINGS" section) rather than buildBracketHtml's own WB/LB/GF
-// counters — deliberately simpler. Double-elimination's WB/LB/GF-specific
-// labels are NOT reproduced here, so this banner can say "Round 4" for a
-// column the Bracket tab itself labels "LB Round 2" — a known, cosmetic-only
-// mismatch in that one schedule logic, accepted to avoid extracting a
-// shared label helper as part of this feature (the highlight itself is
-// unaffected either way). See HANDOFF_LOG.md.
-function bracketRoundName(round) {
-  return round.isFinal ? 'Final' : round.isSemis ? 'Semis' : 'Round ' + round.roundNum;
-}
-
 function buildFollowBannerHtml(state, follow) {
   var key = getFollowedUnit();
   if (!key) return '';
@@ -570,8 +569,10 @@ function buildFollowBannerHtml(state, follow) {
     return `<div class="bracket-follow-pill is-out"><strong>Following ${esc(unitDisplay(state, key).label)}</strong> — not in this bracket</div>`;
   }
   var label = esc(unitDisplay(state, key).label);
-  var round = state.rounds[follow.lastRi];
-  var roundName = bracketRoundName(round);
+  // Same label the column header itself shows — including WB/LB/Grand Final
+  // for double-elimination — via the shared bracketRoundLabels(), not a
+  // separate, simpler derivation that could drift out of sync with it.
+  var roundName = bracketRoundLabels(state)[follow.lastRi].label;
   var whereHtml;
   if (follow.eliminated) {
     whereHtml = `out in ${roundName}`;
