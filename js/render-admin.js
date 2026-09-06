@@ -498,13 +498,13 @@ function renderMultiGameFinals(asgn, round) {
           if (!member) { cells.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="number" class="score-inp" style="width:70px" disabled placeholder="—"><span style="font-size:11px;color:var(--muted);font-style:italic">Vacant</span></div>`); continue; }
           var mkey = `game${g}-${p.name}-m${mi}`;
           var mval = T.finalScores[mkey] !== undefined ? T.finalScores[mkey] : '';
-          cells.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="number" class="score-inp" style="width:70px" value="${mval}" min="0" data-fkey="${mkey}" oninput="finalScoreChanged(this)"><span style="font-size:11px;color:var(--muted)">${esc(member.name)}</span></div>`);
+          cells.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="number" class="score-inp" style="width:70px" value="${mval}" min="0" data-fkey="${esc(mkey)}" oninput="finalScoreChanged(this)"><span style="font-size:11px;color:var(--muted)">${esc(member.name)}</span></div>`);
         }
         content += `<tr><td><strong>${esc(teamName)}</strong></td><td>${cells.join('')}</td></tr>`;
       } else {
         var key = `game${g}-${p.name}`;
         var val = T.finalScores[key] !== undefined ? T.finalScores[key] : '';
-        content += `<tr><td>${esc(p.name)}</td><td><input type="number" class="score-inp" value="${val}" min="0" data-fkey="${key}" oninput="finalScoreChanged(this)"></td></tr>`;
+        content += `<tr><td>${esc(p.name)}</td><td><input type="number" class="score-inp" value="${val}" min="0" data-fkey="${esc(key)}" oninput="finalScoreChanged(this)"></td></tr>`;
       }
     });
     content += '</tbody></table></div>';
