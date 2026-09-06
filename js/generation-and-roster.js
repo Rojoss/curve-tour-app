@@ -1090,6 +1090,16 @@ function swapPlayer(oldName) {
   T.players = T.players.filter(p => p !== oldName).concat([newName]);
   T.reserves = T.reserves.filter(r => r !== newName);
 
+  // T.qualTable self-heals during the pooling/standings phase itself
+  // (updateQualTable() rebuilds it from scratch off the live roster on every
+  // score entry), so this is only ever load-bearing for a swap during the
+  // BRACKET phase, once that rebuild has permanently stopped running —
+  // otherwise the outgoing name's row lingers forever in the Qualification
+  // Table/Swiss Standings display (which never turns back off once shown,
+  // see isStandingsPhase in js/render-admin.js), same cleanup removePlayer()
+  // already does.
+  T.qualTable = T.qualTable.filter(p => p.name !== oldName);
+
   // T.byes[ri] is a SEPARATE array of raw names that advanceRound() reads
   // directly to auto-advance whoever had a bye this round (js/advancement.js)
   // — completely independent of T.assignments[ri]. Without this remap, a
@@ -1177,6 +1187,14 @@ function swapTeam(oldTeamId) {
 
   T.players = T.players.filter(t => t.teamId !== oldTeamId).concat([newTeam]);
   T.reserves = T.reserves.filter(t => t.teamId !== newTeam.teamId); // correct no-op on the walk-up path
+
+  // Same T.qualTable staleness swapPlayer() fixes above, worse here for team
+  // formats specifically: unitDisplay() falls back to showing the raw
+  // teamId string once teamMap() can no longer find the removed team
+  // (js/formats-and-primitives.js:214) — so a stale row here doesn't just
+  // linger under an outdated but readable name, it renders as ugly
+  // "team_1234567_0" text in the Qualification Table/Swiss Standings.
+  T.qualTable = T.qualTable.filter(p => p.name !== oldTeamId);
 
   // Same T.byes[ri]/T.poolingByeCounts ghost-advancement bug swapPlayer()
   // had until this same build fixed it there too (see the comment on that
