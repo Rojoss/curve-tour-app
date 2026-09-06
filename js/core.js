@@ -400,6 +400,12 @@ var MAX_ELIM_ROUNDS = 8; // hard cap so a huge field doesn't produce an absurdly
 function proceedReset() {
   Object.assign(T, { scores:{}, finalScores:{}, assignments:[], qualTable:[], groupStandings:{}, poolingByeCounts:{}, pendingBracketSeeds:{},
     tieResolutions:{}, luckyLosers:[], byes:[], defenderChanges:{}, curRound:0, reserveOpen:true, started:false, needsSave:false, autoSaved:false, tournamentId:null });
+  // Bracket's per-browser round-collapse state (js/render-viewer.js) — clear
+  // explicitly for predictability, so replaying the same generation never
+  // silently resumes old collapse choices (curRound:0 above already makes
+  // any stale override structurally inert, since every round becomes
+  // "future" again, but a hygienic clean slate is worth doing anyway).
+  if (typeof bracketCollapseOverride !== 'undefined') bracketCollapseOverride = {};
   document.getElementById('panel-setup').style.display = 'block';
   document.getElementById('panel-running').style.display = 'none';
   document.getElementById('preview-wrap').style.display = 'none';

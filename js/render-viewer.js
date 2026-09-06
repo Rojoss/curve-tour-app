@@ -171,7 +171,7 @@ function renderScoreboard() {
 // already reads other state fields — no separate parameter needed. No
 // dynamic "Player" text exists in this builder's output today (bracket cards
 // show names directly, no table header), so there's nothing to wire up yet.
-function buildBracketHtml(state) {
+function buildBracketHtml(state, collapseMap) {
   var html = '';
   var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
   // Local per-bracket round counters for double-elimination's own column
@@ -218,8 +218,19 @@ function buildBracketHtml(state) {
                round.isSwiss ? 'Round '+round.roundNum+' (Swiss)' :
                round.isGroupStage ? 'Round '+round.roundNum+' (Group)' : 'Round '+round.roundNum;
     }
-    html += `<div class="bracket-round-col">
-      <div class="bracket-round-hdr${isCurrent?' current-hdr':''}${hdrAccentCls}">${rLabel}</div>`;
+    // Past rounds only: renderBracket() is the only caller that ever passes
+    // a collapseMap, and only ever includes entries for ri < curRound — so a
+    // current/future round has no key here at all and gets no collapsible
+    // class or onclick, not just collapsed=false (see HANDOFF.md "Design
+    // intent for viewer-facing tabs": future rounds are never a candidate
+    // for collapsing, not even manually).
+    var isCollapsible = collapseMap && collapseMap.hasOwnProperty(ri);
+    var isCollapsed = isCollapsible && collapseMap[ri];
+
+    html += `<div class="bracket-round-col${isCollapsed?' is-collapsed':''}">
+      <div class="bracket-round-hdr${isCurrent?' current-hdr':''}${hdrAccentCls}${isCollapsible?' collapsible':''}${isCollapsed?' is-collapsed':''}"${isCollapsible?` onclick="toggleBracketCollapse(${ri})"`:''}>${isCollapsible?'<span class="bracket-collapse-chevron">▸</span>':''}${rLabel}</div>`;
+
+    if (isCollapsed) { html += '</div>'; return; }
 
     if (!asgn.length) {
       html += `<div style="color:var(--muted);font-size:12px;padding:8px">Not yet seeded</div>`;
@@ -231,7 +242,7 @@ function buildBracketHtml(state) {
         // roomGroups[rm-1]) instead of a bare room letter, since "Room A"
         // alone doesn't say which of the K groups it belongs to.
         var roomHeading = round.isGroupStage ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm) : 'Room ' + roomLabel(rm);
-        html += `<div class="bracket-room-card"><div class="bracket-room-name">${roomHeading}</div>`;
+        html += `<div class="bracket-room-group"><div class="bracket-room-label">${roomHeading}</div>`;
 
         var scoredList = players.map((p, pi) => ({ name: p.name, score: getUnitScore(state, ri, rm, pi, null) }));
         // Only reveal a room's scores/outcome once every player in it has a
@@ -285,6 +296,32 @@ function buildBracketHtml(state) {
   return html;
 }
 
+// Bracket round-collapse state — per-browser, in-memory only (never written
+// to T, never synced to Firebase, resets on reload). Stores only EXPLICIT
+// user toggles, keyed by round index; a round with no entry here falls back
+// to the default heuristic below, computed fresh every render rather than
+// stored, same "derive at render time" preference the rest of this app
+// already follows for round status. Cleared in proceedGenerateSchedule() and
+// proceedReset() so a stale round index never bleeds into a differently-
+// shaped tournament (see HANDOFF.md "Design intent for viewer-facing tabs").
+var bracketCollapseOverride = {};
+
+// Every past round collapses by default except the one immediately before
+// the current one — that's the round someone landing on Bracket is most
+// likely to still care about (a recent lucky loser, a tie-break, who just
+// advanced into a room they're about to watch); everything further back is
+// the actual clutter a big field produces.
+function bracketRoundDefaultCollapsed(ri, state) {
+  return ri < state.curRound - 1;
+}
+function isBracketRoundCollapsed(ri, state) {
+  return bracketCollapseOverride.hasOwnProperty(ri) ? bracketCollapseOverride[ri] : bracketRoundDefaultCollapsed(ri, state);
+}
+function toggleBracketCollapse(ri) {
+  bracketCollapseOverride[ri] = !isBracketRoundCollapsed(ri, T);
+  renderBracket();
+}
+
 // No separate mode parameter needed here — buildBracketHtml(state) already
 // takes the full state object, which now carries gameFormat/scheduleLogic/
 // gamemodeConfig alongside everything else, live T included.
@@ -292,7 +329,12 @@ function renderBracket() {
   if (!T.rounds.length) return;
   document.getElementById('br-empty').style.display = 'none';
   document.getElementById('br-content').style.display = 'block';
-  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T);
+  // Only past rounds ever get a collapseMap entry — current/future rounds
+  // are structurally incapable of collapsing, not just collapsed=false by
+  // default (see buildBracketHtml's isCollapsible check).
+  var collapseMap = {};
+  for (var ri = 0; ri < T.curRound; ri++) collapseMap[ri] = isBracketRoundCollapsed(ri, T);
+  document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap);
 }
 
 // ═══════════════════════════════════════════════════════════════

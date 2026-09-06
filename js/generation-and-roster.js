@@ -534,6 +534,10 @@ function proceedGenerateSchedule() {
   // above — a previous tournament's defender-change history (see "Defender
   // history" in HANDOFF.md) must never carry forward into a fresh one.
   T.defenderChanges = {};
+  // Bracket's per-browser round-collapse state (js/render-viewer.js) is
+  // keyed by round index — a fresh generation can have a different round
+  // count/shape, so stale indices must not carry over.
+  if (typeof bracketCollapseOverride !== 'undefined') bracketCollapseOverride = {};
   T.rounds = buildProgression(cfg);
   // Real runtime safety net (see validateRoomCap() / HARD_ROOM_PLAYER_CAP
   // above) — checked once, right after generation, against every room the

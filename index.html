@@ -155,22 +155,36 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 
 /* Bracket overview */
 .bracket-scroll{display:flex;gap:16px;overflow-x:auto;padding-bottom:12px}
-.bracket-round-col{width:200px;min-width:200px;flex-shrink:0}
+.bracket-round-col{width:200px;min-width:200px;flex-shrink:0;transition:width .18s ease,min-width .18s ease}
+.bracket-round-col.is-collapsed{width:34px;min-width:34px}
 .bracket-round-hdr{font-family:var(--font-d);font-size:13px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .bracket-round-hdr.current-hdr{color:var(--cyan)}
 /* Double-elimination column accents — a colored top border per bracket so a
    viewer can tell WB/LB/grand-final columns apart at a glance (see "Double
-   elimination" Part 5 in HANDOFF.md). */
+   elimination" Part 5 in HANDOFF.md). Unaffected by the collapsed/vertical
+   treatment below since border-top stays a physical top edge either way. */
 .bracket-round-hdr.wb-hdr{border-top:2px solid var(--green);padding-top:4px}
 .bracket-round-hdr.lb-hdr{border-top:2px solid var(--amber);padding-top:4px}
 .bracket-round-hdr.gf-hdr{border-top:2px solid var(--purple);padding-top:4px}
-.bracket-room-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden}
-.bracket-room-name{background:var(--surface2);padding:5px 10px;font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--cyan);letter-spacing:1px}
-.bracket-player-row{padding:5px 10px;font-size:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
-.bracket-player-row:last-child{border-bottom:none}
-.bracket-player-row.adv{color:var(--green)}
-.bracket-player-row.elim{color:var(--muted);text-decoration:line-through;opacity:.5}
-.bracket-player-row.lucky{color:var(--purple)}
+/* Collapse toggle — only past rounds ever get the .collapsible class
+   (current/future rounds are never clickable, see buildBracketHtml). */
+.bracket-round-hdr.collapsible{cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px}
+.bracket-round-hdr.collapsible:hover{color:var(--text)}
+.bracket-collapse-chevron{display:inline-block;font-size:10px;flex-shrink:0;transition:transform .15s ease}
+.bracket-round-hdr.collapsible:not(.is-collapsed) .bracket-collapse-chevron{transform:rotate(90deg)}
+.bracket-round-col.is-collapsed .bracket-round-hdr{writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;height:180px;margin-bottom:0;padding:8px 0 8px 2px}
+.bracket-round-col.is-collapsed .bracket-round-hdr .bracket-collapse-chevron{writing-mode:horizontal-tb;transform:rotate(180deg)}
+
+/* Room grouping — a plain label + a left-border colour accent per row
+   instead of a boxed card per room (same accent pattern already used for
+   Rankings' .rk-row), so a column with many stacked rooms (a large field's
+   early rounds) reads at a glance without the extra chrome. */
+.bracket-room-group{margin-bottom:10px}
+.bracket-room-label{font-family:var(--font-d);font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;padding-left:2px}
+.bracket-player-row{padding:4px 8px 4px 10px;font-size:12px;border-left:3px solid transparent;display:flex;align-items:center;gap:6px}
+.bracket-player-row.adv{border-left-color:var(--green);color:var(--green)}
+.bracket-player-row.elim{border-left-color:var(--border);color:var(--muted);text-decoration:line-through;opacity:.5}
+.bracket-player-row.lucky{border-left-color:var(--purple);color:var(--purple)}
 .bracket-score{margin-left:auto;font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--muted)}
 .bracket-tb-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--amber);background:#FFB83022;padding:1px 5px;border-radius:8px;margin-left:2px;vertical-align:middle}
 
@@ -178,9 +192,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    single-line flex row individual formats use: name+score never wrap or
    truncate, but member names on line 2 do wrap freely (no nowrap, no
    ellipsis) and the block takes whatever height that needs — a team with
-   long names simply makes its room's card taller. */
-.bracket-team-row{padding:5px 10px;font-size:12px;border-bottom:1px solid var(--border)}
-.bracket-team-row:last-child{border-bottom:none}
+   long names simply makes its row taller. The left-border accent goes on
+   the whole block so it's visible regardless of which line the eye is on;
+   .bracket-team-name keeps its own text-color rule below unchanged. */
+.bracket-team-row{padding:4px 8px 4px 10px;font-size:12px;border-left:3px solid transparent}
+.bracket-team-row.adv{border-left-color:var(--green)}
+.bracket-team-row.elim{border-left-color:var(--border);opacity:.5}
+.bracket-team-row.lucky{border-left-color:var(--purple)}
 .bracket-team-line1{display:flex;align-items:center;gap:6px}
 .bracket-team-name{flex:1;min-width:0}
 .bracket-team-row.adv .bracket-team-name{color:var(--green)}
@@ -190,7 +208,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 
 /* Bracket bye card ("Bye" odd-count strategy) — a round's bye recipient
    doesn't belong to any room, so it gets its own small card instead of a row
-   inside a .bracket-room-card, rendered after that round's real rooms. */
+   inside a .bracket-room-group, rendered after that round's real rooms. */
 .bracket-bye-card{background:var(--surface);border:1px dashed var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--amber)}
 .bracket-bye-label{font-family:var(--font-d);font-weight:700;letter-spacing:.5px;margin-right:6px}
 
