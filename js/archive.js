@@ -74,6 +74,25 @@ function performArchiveSave(id, title, keepAnnotations) {
   if (getActiveTab() === 'archive') renderArchiveList();
 }
 
+// "Save as new entry" (here) and "Import as new copy"/"Import all as new
+// copies" (js/archive.js's import section) both deliberately keep the SAME
+// tournamentId on the duplicate — correct, since it genuinely is another
+// snapshot of the same real tournament, not a different one — so more than
+// one archive entry can share a tournamentId. Plain index.find() would
+// return whichever one happens to sit first in the raw array, which is
+// insertion order, not necessarily chronological (a bulk import in
+// particular can insert an older-dated entry after a newer one already in
+// the index) — an arbitrary, unpredictable "Overwrite" target once there are
+// two or more. Picking the most-recently-saved of the matches instead is a
+// small, low-stakes call (not surfaced as a design fork): it matches the
+// ordinary "continue where I left off" intuition, and is a strict
+// improvement over array order with no new UI needed.
+function findLatestArchiveEntryForTournament(index, tournamentId) {
+  var matches = index.filter(e => e.tournamentId === tournamentId);
+  if (!matches.length) return undefined;
+  return matches.reduce((latest, e) => new Date(e.dateSaved) > new Date(latest.dateSaved) ? e : latest);
+}
+
 // Interactive save — the one path that can prompt. Matches by T.tournamentId
 // (stable per-generation identity), not by title — organisers can and do reuse
 // titles across genuinely different tournaments (e.g. a recurring weekly event),
@@ -85,7 +104,7 @@ function saveToArchive() {
   if (!T.rounds.length) return;
   var title = (T.title || '').trim() || 'Unnamed Tournament';
   var index = getArchiveIndex();
-  var sameTournament = T.tournamentId ? index.find(e => e.tournamentId === T.tournamentId) : undefined;
+  var sameTournament = T.tournamentId ? findLatestArchiveEntryForTournament(index, T.tournamentId) : undefined;
   function doSave(id, keepAnnotations) {
     performArchiveSave(id, title, keepAnnotations);
     showArchiveStatus('Tournament saved to archive.');
@@ -126,8 +145,10 @@ function archiveSilently(statusMsg) {
   if (!T.rounds.length) return;
   var title = (T.title || '').trim() || 'Unnamed Tournament';
   // Matches by tournamentId only — never by title, so a title shared with a
-  // different tournament can never be silently overwritten here.
-  var existing = T.tournamentId ? getArchiveIndex().find(e => e.tournamentId === T.tournamentId) : undefined;
+  // different tournament can never be silently overwritten here. The most
+  // recent match when several share this tournamentId — see
+  // findLatestArchiveEntryForTournament()'s comment above.
+  var existing = T.tournamentId ? findLatestArchiveEntryForTournament(getArchiveIndex(), T.tournamentId) : undefined;
   performArchiveSave(existing ? existing.id : String(Date.now()), title, !!existing);
   showArchiveStatus(statusMsg);
 }
