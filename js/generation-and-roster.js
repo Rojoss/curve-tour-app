@@ -794,6 +794,7 @@ function renderManageTeams() {
         <span class="seed-player" style="font-weight:600">${esc(team.teamName)}</span>
         <span>
           <button class="btn btn-secondary btn-sm" onclick="promptRenameTeam('${escAttr(team.teamId)}')" title="Rename team">✎</button>
+          <button class="btn btn-secondary btn-sm" onclick="swapTeam('${escAttr(team.teamId)}')" title="Swap team — replace with a reserve or walk-up team, in this exact room slot">⇄</button>
           <button class="btn btn-secondary btn-sm" onclick="removeTeam('${escAttr(team.teamId)}')" title="Remove team">✕</button>
         </span>
       </div>`;
@@ -1089,9 +1090,149 @@ function swapPlayer(oldName) {
   T.players = T.players.filter(p => p !== oldName).concat([newName]);
   T.reserves = T.reserves.filter(r => r !== newName);
 
+  // T.byes[ri] is a SEPARATE array of raw names that advanceRound() reads
+  // directly to auto-advance whoever had a bye this round (js/advancement.js)
+  // — completely independent of T.assignments[ri]. Without this remap, a
+  // swap on a unit whose room is null (a bye recipient) leaves the OLD name
+  // sitting in T.byes[ri]: on the next Next Round click, the outgoing unit
+  // ghost-advances (it's still what T.byes[ri] names) while the incoming
+  // unit — sitting right there in the assignment — silently never advances.
+  // Remap, don't clear: the slot genuinely IS on a bye this round, and
+  // carrying the bye count forward keeps fair-bye-rotation (js/pooling-
+  // phases.js) honest instead of handing the incoming unit an undeserved
+  // "zero byes so far" advantage.
+  if (T.byes[ri]) T.byes[ri] = T.byes[ri].map(n => n === oldName ? newName : n);
+  if (T.poolingByeCounts[oldName] !== undefined) {
+    T.poolingByeCounts[newName] = T.poolingByeCounts[oldName];
+    delete T.poolingByeCounts[oldName];
+  }
+
   renderAdminRound();
   markDirty();
   saveState();
+}
+
+// Team-format counterpart to swapPlayer() above — same same-slot semantics,
+// generalized for the extra -m{mi} score-key dimension teams have. Modeled
+// on swapPlayer(), NOT on removeTeam(): nothing re-packs, the assignment
+// entry's .name is mutated in place. See "Whole-team swap" in
+// HANDOFF_LOG.md for the full design reasoning — walk-up entry reuses
+// parseTeamLines() rather than a per-member prompt loop; the name-collision
+// guard below is a soft confirm() rather than swapPlayer()'s hard refuse,
+// since promptRenameTeam() already permits duplicate team names with no
+// check at all — a hard refuse here would be inconsistent with that
+// established rule, not an improvement on it.
+function swapTeam(oldTeamId) {
+  var ri = T.curRound;
+  var asgn = T.assignments[ri] || [];
+  var entryIdx = asgn.findIndex(a => a.name === oldTeamId);
+  var oldTeam = T.players.find(t => t.teamId === oldTeamId);
+  if (!oldTeam) return;
+  if (entryIdx === -1) {
+    alert('"' + oldTeam.teamName + '" is not in the current round — use Remove instead.');
+    return;
+  }
+  var teamSize = getGamemodeDescriptor().format.teamSize;
+
+  var newTeam = null;
+  if (T.reserves.length) {
+    var menu = 'Swap out "' + oldTeam.teamName + '".\n\n  0 — type a brand-new walk-up team\n' +
+      T.reserves.map((t, i) => '  ' + (i + 1) + ' — ' + t.teamName + ' (' + t.members.filter(Boolean).map(m => m.name).join(', ') + ')').join('\n') +
+      '\n\nEnter a number:';
+    var choice = prompt(menu);
+    if (choice === null) return; // cancelled
+    choice = choice.trim();
+    if (!choice) return; // blank deliberately means abort, not "start walk-up" — 0 is the explicit opt-in
+    if (!/^\d+$/.test(choice)) { alert('"' + choice + '" isn\'t one of the listed numbers.'); return; }
+    var n = parseInt(choice, 10);
+    if (n === 0) {
+      newTeam = promptWalkupTeam(teamSize);
+      if (!newTeam) return;
+    } else if (n >= 1 && n <= T.reserves.length) {
+      newTeam = T.reserves[n - 1];
+    } else {
+      alert('"' + choice + '" isn\'t one of the listed numbers.');
+      return;
+    }
+  } else {
+    newTeam = promptWalkupTeam(teamSize);
+    if (!newTeam) return;
+  }
+
+  if (T.players.some(t => t.teamName === newTeam.teamName) &&
+      !confirm('A team called "' + newTeam.teamName + '" is already competing. Two teams with the same name will be hard to tell apart on the Bracket and Scoreboard. Add it anyway?')) {
+    return;
+  }
+
+  var room = asgn[entryIdx].room;
+  var posInRoom = asgn.filter(a => a.room === room).findIndex(a => a.name === oldTeamId);
+
+  // Same slot, in place — mirrors swapPlayer() exactly, not removeTeam()'s
+  // repack-the-room behavior.
+  asgn[entryIdx].name = newTeam.teamId;
+  // Current round's scores at this position only — every mi, same "cleared,
+  // never transferred" rule as swapPlayer()'s single delete.
+  for (var mi = 0; mi < teamSize; mi++) delete T.scores[`r${ri}-rm${room}-p${posInRoom}-m${mi}`];
+  invalidateStaleTieResolutions(ri, room);
+
+  T.players = T.players.filter(t => t.teamId !== oldTeamId).concat([newTeam]);
+  T.reserves = T.reserves.filter(t => t.teamId !== newTeam.teamId); // correct no-op on the walk-up path
+
+  // Same T.byes[ri]/T.poolingByeCounts ghost-advancement bug swapPlayer()
+  // had until this same build fixed it there too (see the comment on that
+  // fix, above) — identical remap, teamId instead of a plain name.
+  if (T.byes[ri]) T.byes[ri] = T.byes[ri].map(n => n === oldTeamId ? newTeam.teamId : n);
+  if (T.poolingByeCounts[oldTeamId] !== undefined) {
+    T.poolingByeCounts[newTeam.teamId] = T.poolingByeCounts[oldTeamId];
+    delete T.poolingByeCounts[oldTeamId];
+  }
+  // Group-stage membership is a separate fixed key list. A same-slot swap
+  // preserves the group's membership COUNT exactly — only the key changes —
+  // so remapping (not refusing, unlike addTeamReserve()'s group-stage
+  // refusal, which exists because an ADD changes headcount) is both
+  // sufficient and correct here.
+  (T.groups || []).forEach(g => { g.members = g.members.map(k => k === oldTeamId ? newTeam.teamId : k); });
+
+  // T.defenderChanges[oldTeamId] is deliberately left untouched — the
+  // incoming team's fresh teamId finds no entry, so getDefenderIndex()
+  // naturally defaults to member 0, exactly mirroring how swapPlayer()
+  // also lets an incoming individual start with no score history rather
+  // than transferring any. Never resurfaces: teamIds are never recycled,
+  // and T.defenderChanges is already wiped on both regenerate and reset.
+
+  renderAdminRound();
+  markDirty();
+  saveState();
+}
+
+// Shared by swapTeam()'s walk-up path — one prompt() using the exact
+// "TeamName | P1 | P2" syntax already taught at setup (toggleFormatFields()),
+// parsed via the same parseTeamLines() setup itself uses, rather than a
+// per-member prompt loop: one cancel point instead of teamSize+1, and zero
+// new parsing/ID-generation code to get wrong. A short line pads with null
+// per parseTeamLines()'s own documented behavior — exactly what Manage
+// Teams' vacant-slot UI already expects, so "leave a member blank" already
+// has a well-defined, precedented meaning without any new rule here.
+function promptWalkupTeam(teamSize) {
+  var memberPlaceholders = [];
+  for (var mi = 0; mi < teamSize; mi++) memberPlaceholders.push('Player' + (mi + 1));
+  var memberHint = memberPlaceholders.join(' | ');
+  var line = prompt('Enter the replacement team, same format as the roster:\n\nTeamName | ' + memberHint, 'Team name | ' + memberHint);
+  if (line === null) return null;
+  line = line.trim();
+  if (!line) return null;
+  var parsed = parseTeamLines(line, 'team', teamSize)[0];
+  if (!parsed) return null;
+  // Belt-and-braces uniqueness, walk-up path only — parseTeamLines()'s
+  // Date.now()-based scheme makes a real collision practically impossible,
+  // but a fresh id colliding with an EXISTING team/reserve is at least
+  // theoretically possible, unlike a picked reserve (whose id is expected
+  // and meant to already exist in T.reserves — this check must never run on
+  // that path, or it would strip a legitimately-picked reserve of its own
+  // identity). teamMap() already covers both T.players and T.reserves.
+  var known = teamMap(T), bump = 0;
+  while (known[parsed.teamId]) parsed.teamId = 'team_' + Date.now() + '_' + (++bump);
+  return parsed;
 }
 
 function removePlayer(name) {
