@@ -109,6 +109,42 @@ function clearSyncUrlBar() {
   history.replaceState(null, '', location.pathname);
 }
 
+// Firebase Realtime Database prunes any key — including an array element —
+// whose value is null; that's fundamental to how it stores data, not a
+// configurable behavior. Harmless almost everywhere in T (a missing key
+// already means the same thing as an explicit null wherever it's read —
+// see getUnitScore()'s undefined-or-null fallback convention), but for
+// anything where POSITION matters — team.members[mi], keyed to score
+// fields like "-m{mi}" — losing a null array element doesn't just drop it,
+// it shifts every later element down an index, silently misattributing
+// whoever was at a later position (see "Fix: Firebase live-sync silently
+// drops null array elements" in HANDOFF_LOG.md — this is the actual root
+// cause of a real, reported "team.members is undefined" crash). Marshaled
+// right before every Firebase write and reversed right after every
+// Firebase read, so nothing else in this app — not T, not any render or
+// mutation function — ever needs to know this happens.
+var FIREBASE_NULL_SENTINEL_KEY = '__ffaNull';
+function marshalNullsForFirebase(value) {
+  if (value === null) { var s = {}; s[FIREBASE_NULL_SENTINEL_KEY] = true; return s; }
+  if (Array.isArray(value)) return value.map(marshalNullsForFirebase);
+  if (value && typeof value === 'object') {
+    var out = {};
+    Object.keys(value).forEach(function (k) { out[k] = marshalNullsForFirebase(value[k]); });
+    return out;
+  }
+  return value;
+}
+function unmarshalNullsFromFirebase(value) {
+  if (value && typeof value === 'object' && value[FIREBASE_NULL_SENTINEL_KEY]) return null;
+  if (Array.isArray(value)) return value.map(unmarshalNullsFromFirebase);
+  if (value && typeof value === 'object') {
+    var out = {};
+    Object.keys(value).forEach(function (k) { out[k] = unmarshalNullsFromFirebase(value[k]); });
+    return out;
+  }
+  return value;
+}
+
 // Debounced — saveState() runs on every real mutation (and every tab
 // switch), so without this a quick run of score entries would fire one
 // Firebase write per keystroke/click instead of one per pause. Snapshots
@@ -123,7 +159,7 @@ function pushSyncUpdate() {
   clearTimeout(syncPushTimer);
   syncPushTimer = setTimeout(function () {
     var payload;
-    try { payload = JSON.parse(JSON.stringify(T)); } catch (e) { return; }
+    try { payload = marshalNullsForFirebase(JSON.parse(JSON.stringify(T))); } catch (e) { return; }
     payload.adminProof = proofHash; // read by the security rules — see HANDOFF.md
     var pushedScores = {}, pushedFinalScores = {};
     syncDirtyScoreKeys.forEach(function (k) { pushedScores[k] = T.scores[k]; });
@@ -155,7 +191,7 @@ function startWriterListener() {
   if (SYNC_IS_VIEWER || !SYNC_DB || !T.tournamentId) return;
   syncWriterListenerRef = SYNC_DB.ref('tournaments/' + T.tournamentId);
   syncWriterListenerRef.on('value', function (snapshot) {
-    var payload = snapshot.val();
+    var payload = unmarshalNullsFromFirebase(snapshot.val());
     if (payload) applyRemoteWriterUpdate(payload);
   }, function (error) {
     console.warn('Live sync (writer) connection lost', error);
@@ -189,6 +225,7 @@ function applyRemoteWriterUpdate(payload) {
   delete payload.scores;
   delete payload.finalScores;
   Object.assign(T, payload);
+  normalizeTeamRosters(T); // repairs any team already corrupted before the null-array fix shipped — see js/formats-and-primitives.js
   updateTitleDisplay();
   var hdrRound = document.getElementById('hdr-round');
   if (hdrRound) hdrRound.textContent = (T.rounds && T.rounds[T.curRound]) ? T.rounds[T.curRound].roundNum : '—';
@@ -285,8 +322,10 @@ function startViewerListener() {
       showSyncViewerOverlay('Waiting for the tournament to start…', 'This link is valid, but the organiser hasn\'t generated a schedule yet. This page updates automatically once they do.');
       return;
     }
+    payload = unmarshalNullsFromFirebase(payload);
     delete payload.adminProof;
     Object.assign(T, payload);
+    normalizeTeamRosters(T); // repairs any team already corrupted before the null-array fix shipped — see js/formats-and-primitives.js
     hideSyncViewerOverlay();
     hideSyncStaleBanner();
     renderTabForViewerSync();

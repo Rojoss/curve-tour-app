@@ -307,7 +307,7 @@ function renderRooms(ri, round, asgn, formatDescriptor) {
       if (teamSize) {
         var team = teamMap(T)[p.name];
         var teamName = team ? team.teamName : p.name;
-        var members = team ? team.members : [];
+        var members = (team && team.members) || []; // team truthy doesn't guarantee .members — see renderManageTeams()'s matching fix
         var scoreCell = [];
         for (var mi = 0; mi < teamSize; mi++) {
           var member = members[mi];
@@ -491,7 +491,7 @@ function renderMultiGameFinals(asgn, round) {
       if (teamSize) {
         var team = teamMap(T)[p.name];
         var teamName = team ? team.teamName : p.name;
-        var members = team ? team.members : [];
+        var members = (team && team.members) || []; // team truthy doesn't guarantee .members — see renderManageTeams()'s matching fix
         var cells = [];
         for (var mi = 0; mi < teamSize; mi++) {
           var member = members[mi];

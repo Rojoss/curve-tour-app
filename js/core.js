@@ -123,6 +123,7 @@ function loadState() {
     if (!raw) return;
     var saved = JSON.parse(raw);
     Object.assign(T, saved.T);
+    if (typeof normalizeTeamRosters === 'function') normalizeTeamRosters(T);
     // Backward compat: a schedule generated before tournamentId existed has none —
     // assign one now so archive matching (see saveToArchive/archiveSilently) has
     // something stable to key off going forward.

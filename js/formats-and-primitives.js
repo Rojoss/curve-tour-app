@@ -202,6 +202,29 @@ function teamMap(state) {
   return m;
 }
 
+// Repairs a team object whose .members array is missing or short — exactly
+// the shape Firebase's null-array pruning produces (see
+// marshalNullsForFirebase() in js/sync.js, and "Fix: Firebase live-sync
+// silently drops null array elements" in HANDOFF_LOG.md). Mutates the team
+// objects in place, so every consumer — rendering AND the mutation
+// handlers a "Vacant slot" row's own buttons call (setDefender(),
+// fillVacantSlotFromReserve(), etc.) — sees a real array from this point
+// on. The marshal/unmarshal fix in js/sync.js stops NEW corruption from
+// happening; this repairs data that was already corrupted before that fix
+// shipped, so it stays usable rather than merely non-crashing. Called
+// wherever T can be populated from an external source (loadState(), and
+// both Firebase merge paths in js/sync.js) — a no-op for an individual
+// format (no teamSize) or once every team already has a full-length array.
+function normalizeTeamRosters(state) {
+  var teamSize = getGamemodeDescriptorFor(state).format.teamSize;
+  if (!teamSize) return;
+  (state.players || []).concat(state.reserves || []).forEach(function (t) {
+    if (!t || typeof t !== 'object') return;
+    if (!t.members) t.members = [];
+    while (t.members.length < teamSize) t.members.push(null);
+  });
+}
+
 // Resolves an identity key (a player name, or a team's teamId) to display
 // info. `state` supplies both the format (individual formats just echo the
 // key back as the label) and the roster (a teamId is looked up fresh each

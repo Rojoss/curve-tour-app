@@ -215,8 +215,21 @@ function loadRoster() {
   var format = GAME_FORMATS[document.getElementById('cfg-game-format').value];
 
   if (format.teamSize) {
-    T.players  = parseTeamLines(raw, 'team', format.teamSize);
-    T.reserves = parseTeamLines(rawR, 'reserveteam', format.teamSize);
+    var parsedPlayers  = parseTeamLines(raw, 'team', format.teamSize);
+    var parsedReserves = parseTeamLines(rawR, 'reserveteam', format.teamSize);
+    // A team with NO real players at all (every slot vacant) is nonsensical
+    // on its own terms, and is also exactly the shape that triggers Firebase's
+    // null-array pruning (see marshalNullsForFirebase() in js/sync.js) —
+    // refuse the whole load rather than silently accepting it. A partially-
+    // filled team (some real members, some deliberately vacant — the
+    // existing "fill later" flow) is untouched.
+    var emptyTeams = parsedPlayers.concat(parsedReserves).filter(t => t.members.every(m => !m));
+    if (emptyTeams.length) {
+      alert('These team(s) have no players listed at all — add at least one "TeamName | Player1 | ..." member, or remove the line:\n\n' + emptyTeams.map(t => t.teamName).join('\n'));
+      return;
+    }
+    T.players  = parsedPlayers;
+    T.reserves = parsedReserves;
     T.reserveIndividuals = document.getElementById('cfg-reserve-individuals').value.trim()
       .split('\n').map(s => s.trim()).filter(Boolean).map(parseMemberLine);
   } else {
@@ -799,8 +812,9 @@ function renderManageTeams() {
         </span>
       </div>`;
     var defenderIdx = isDefenderRule ? getDefenderIndex(T, team.teamId, T.curRound) : -1;
+    var members = team.members || []; // never let one malformed team blank the whole Admin panel below it
     for (var mi = 0; mi < teamSize; mi++) {
-      var member = team.members[mi];
+      var member = members[mi];
       if (member) {
         var isDefender = mi === defenderIdx;
         html += `<div style="display:flex;justify-content:space-between;align-items:center;padding-left:10px">
@@ -1241,6 +1255,13 @@ function promptWalkupTeam(teamSize) {
   if (!line) return null;
   var parsed = parseTeamLines(line, 'team', teamSize)[0];
   if (!parsed) return null;
+  // Same all-vacant refusal as loadRoster() — see the comment there and
+  // "Fix: Firebase live-sync silently drops null array elements" in
+  // HANDOFF_LOG.md.
+  if (parsed.members.every(m => !m)) {
+    alert('"' + parsed.teamName + '" has no players listed — add at least one member.');
+    return null;
+  }
   // Belt-and-braces uniqueness, walk-up path only — parseTeamLines()'s
   // Date.now()-based scheme makes a real collision practically impossible,
   // but a fresh id colliding with an EXISTING team/reserve is at least
