@@ -2,7 +2,8 @@
 CLAUDE.md
 HANDOFF.md
 HANDOFF_LOG.md
-Past prompts/
+Past files/
+Sheets tournaments/
 
 # Local Claude Code tool-permission config (machine-specific)
 .claude/settings.local.json

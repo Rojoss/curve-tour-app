@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Curve FFA Tournament</title>
+<title>Curve Fever Pro Tour Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -16,7 +16,7 @@
 body{background:var(--bg);color:var(--text);font-family:var(--font-u);font-size:14px;min-height:100vh}
 
 header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:54px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:200}
-.logo{font-family:var(--font-d);font-size:20px;font-weight:700;letter-spacing:3px;color:var(--cyan);text-transform:uppercase}
+.logo{font-family:var(--font-d);font-size:20px;font-weight:700;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;white-space:nowrap;flex-shrink:0}
 .logo span{color:var(--text)}
 .round-display{display:flex;align-items:center;gap:10px}
 .hdr-title{font-family:var(--font-u);font-size:13px;font-weight:600;color:var(--text);cursor:pointer;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px;border-radius:5px;transition:background .15s}
@@ -189,10 +189,14 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-round-hdr.wb-hdr{border-top:2px solid var(--green)}
 .bracket-round-hdr.lb-hdr{border-top:2px solid var(--amber)}
 .bracket-round-hdr.gf-hdr{border-top:2px solid var(--purple)}
-/* Collapse toggle — only past rounds ever get the .collapsible class
-   (current/future rounds are never clickable, see buildBracketHtml). */
+/* Collapse toggle — every round in the live Bracket gets .collapsible now
+   (past, current and future alike, see renderBracketNow's collapseMap);
+   Archive's read-only bracket passes no collapseMap and so has none. */
 .bracket-round-hdr.collapsible{cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px}
 .bracket-round-hdr.collapsible:hover{color:var(--text)}
+/* The current round is collapsible now too, and the hover rule above would
+   otherwise wipe its cyan "you are here" colour on hover. */
+.bracket-round-hdr.current-hdr.collapsible:hover{color:var(--cyan)}
 .bracket-collapse-chevron{display:inline-block;font-size:10px;flex-shrink:0;transition:transform .15s ease}
 .bracket-round-hdr.collapsible:not(.is-collapsed) .bracket-collapse-chevron{transform:rotate(90deg)}
 /* Collapsed strip — deliberately top-anchored (fixed height, not stretched/
@@ -219,6 +223,8 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-room-group{margin-bottom:9px}
 .bracket-room-group:last-child{margin-bottom:0}
 .bracket-room-label{font-family:var(--font-d);font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;padding-left:2px}
+.bracket-placeholder-row{padding:3.5px 7px;font-size:11.5px;border-left:3px dashed var(--border);border-radius:4px;display:flex;align-items:center;gap:6px;color:var(--muted);opacity:.65}
+.bracket-placeholder-note{font-size:10px;color:var(--amber);opacity:.85;margin-top:6px;padding-left:2px}
 .bracket-player-row{padding:3.5px 7px;font-size:11.5px;border-left:3px solid transparent;border-radius:4px;display:flex;align-items:center;gap:6px}
 .bracket-player-row.adv{border-left-color:var(--green);color:var(--green)}
 .bracket-player-row.elim{border-left-color:var(--border);color:var(--muted);text-decoration:line-through;opacity:.5}
@@ -258,6 +264,21 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    highlights the whole team, not just that member's name individually. */
 .bracket-team-row.is-followed,.bracket-final-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44}
 .bracket-team-row.elim.is-followed{opacity:.75}
+
+/* Unresolved tie-break indicator (per-room + qual/group cutoff ties) — red,
+   matching Admin's own existing unresolved-tie banner. Placed AFTER .adv/
+   .elim/.lucky above so it wins the same-specificity source-order tie-break:
+   an elimination that depends on a still-unresolved tie isn't actually
+   settled, so its strikethrough/heavy-fade should yield to this. Only ever
+   sets color/badge — never border-left-color, same "don't destroy the
+   adv/elim/lucky signal" reasoning as .is-followed above. */
+.bracket-player-row.tie-pending{color:var(--red)}
+.bracket-team-row.tie-pending .bracket-team-name{color:var(--red)}
+.bracket-player-row.elim.tie-pending,
+.bracket-team-row.elim.tie-pending{opacity:.85}
+.bracket-player-row.elim.tie-pending{text-decoration:none}
+.bracket-team-row.elim.tie-pending .bracket-team-name{text-decoration:none}
+.bracket-tie-pending-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--red);background:#FF4D6A22;padding:1px 5px;border-radius:8px;margin-left:2px;vertical-align:middle}
 
 /* Score entry from Bracket (admin-unlocked, current round only — see
    bracketScoreEntryAllowed() in js/render-viewer.js). Deliberately the SAME
@@ -365,6 +386,10 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
   main{padding:14px}
   header,nav{padding-left:14px;padding-right:14px}
   .seed-grid{grid-template-columns:1fr 1fr}
+  /* "CFP Tour Hub" (12 glyphs) is meaningfully wider than the old "CURVE FFA"
+     (9 glyphs) at the desktop 20px/3px sizing — step the logo down on narrow
+     viewports so it doesn't crowd .round-display in the same header row. */
+  .logo{font-size:16px;letter-spacing:2px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -372,7 +397,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 <body>
 
 <header>
-  <div class="logo">CURVE <span>FFA</span></div>
+  <div class="logo">CFP <span>Tour Hub</span></div>
   <div class="round-display">
     <div class="hdr-title placeholder" id="hdr-title" onclick="focusTitleInput()" title="">Unnamed Tournament — click to name</div>
     <div class="lbl">Round</div>
@@ -550,7 +575,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
       <input type="text" id="br-follow-input" placeholder="Follow a player…" oninput="followInputChanged()" autocomplete="off">
       <div id="br-follow-banner"></div>
     </div>
-    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament bracket — green = advanced, grey = eliminated, purple = lucky loser. Current round highlighted.</p>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament bracket — green = advanced, grey = eliminated, purple = lucky loser, red ⚠ TB? = tie-break still needs resolving. Current round highlighted.</p>
     <div class="bracket-scroll" id="br-rounds"></div>
   </div>
 </div>

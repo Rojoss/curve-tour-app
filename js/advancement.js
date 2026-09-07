@@ -57,8 +57,9 @@ function detectTieBreaks(ri, round, state) {
   return ties;
 }
 
-function isTieResolved(key, cluster) {
-  return tieResolutionList(T, key).length >= cluster.players.length - 1;
+function isTieResolved(key, cluster, state) {
+  state = state || T;
+  return tieResolutionList(state, key).length >= cluster.players.length - 1;
 }
 
 // A tie-break resolution can go stale if the organiser edits a score (or
@@ -89,13 +90,26 @@ function invalidateStaleTieResolutions(ri, rm) {
 // the qual-table cutoff tie (see detectQualCutoffTie). Both share the same
 // cluster shape ({players, score/fp, key}) and the same
 // resolveTie()/renderTieBanner() peel-off mechanism.
-function getAllTies(ri, round) {
-  var ties = detectTieBreaks(ri, round);
-  var isLastStandingsRound = T.cfg.poolingPhase !== 'none' && isStandingsRound(round) &&
-    !(T.rounds[ri + 1] && isStandingsRound(T.rounds[ri + 1]));
+//
+// state-parameterized (2026-09-07) so Bracket's read-only Archive render can
+// call this safely against a frozen snapshot — see "Bracket: unresolved-tie
+// indicator" in HANDOFF_LOG.md. The live path (state === T) recomputes
+// qualTable/groupStandings before checking a cutoff, matching what Admin's
+// renderTieBanner() has always relied on. A snapshot's qualTable/
+// groupStandings were already frozen correctly by performArchiveSave()'s
+// deep clone at save time — recomputing would mean calling functions that
+// WRITE into live T while reading live T.rounds/T.assignments, corrupting
+// the live tournament as a side effect of rendering an archived one. Trust
+// the snapshot instead.
+function getAllTies(ri, round, state) {
+  state = state || T;
+  var isLive = (state === T);
+  var ties = detectTieBreaks(ri, round, state);
+  var isLastStandingsRound = (state.cfg || {}).poolingPhase !== 'none' && isStandingsRound(round) &&
+    !(state.rounds[ri + 1] && isStandingsRound(state.rounds[ri + 1]));
   if (isLastStandingsRound) {
-    updateQualTable(); // ensure totalFP reflects the latest scores before checking
-    var cutoffTie = detectQualCutoffTie();
+    if (isLive) updateQualTable(); // ensure totalFP reflects the latest scores before checking
+    var cutoffTie = detectQualCutoffTie(state);
     if (cutoffTie) ties[cutoffTie.key] = cutoffTie;
   }
   // Group stage: unlike the single global cutoff above, MULTIPLE groups can
@@ -105,21 +119,22 @@ function getAllTies(ri, round) {
   // detectGroupCutoffTie), so hasPendingTies()/renderTieBanner() below need
   // no structural change to handle several simultaneous clusters — both
   // already just iterate every key in `ties`.
-  var isLastGroupStageRound = round.isGroupStage && !(T.rounds[ri + 1] && T.rounds[ri + 1].isGroupStage);
+  var isLastGroupStageRound = round.isGroupStage && !(state.rounds[ri + 1] && state.rounds[ri + 1].isGroupStage);
   if (isLastGroupStageRound) {
-    updateGroupStandings();
-    T.groups.forEach(g => {
-      var groupTie = detectGroupCutoffTie(g.label);
+    if (isLive) updateGroupStandings();
+    (state.groups || []).forEach(g => {
+      var groupTie = detectGroupCutoffTie(g.label, state);
       if (groupTie) ties[groupTie.key] = groupTie;
     });
   }
   return ties;
 }
 
-function hasPendingTies(ri, round) {
-  var ties = getAllTies(ri, round);
+function hasPendingTies(ri, round, state) {
+  state = state || T;
+  var ties = getAllTies(ri, round, state);
   for (var k in ties) {
-    if (!isTieResolved(k, ties[k])) return true;
+    if (!isTieResolved(k, ties[k], state)) return true;
   }
   return false;
 }
@@ -276,9 +291,10 @@ function updateQualTable() {
 // same peel-off resolution as a per-room tie (see resolveTie), just scoped
 // to the whole qual table instead of one room. Only one cluster can ever
 // exist (there's only one cut line), keyed 'qual-cutoff'.
-function detectQualCutoffTie() {
-  var qt = T.qualTable.filter(p => p.totalFP !== null);
-  var qualAdv = T.cfg.qualAdv;
+function detectQualCutoffTie(state) {
+  state = state || T;
+  var qt = (state.qualTable || []).filter(p => p.totalFP !== null);
+  var qualAdv = (state.cfg || {}).qualAdv;
   if (!qualAdv || qualAdv >= qt.length) return null; // no contested boundary — everyone scored qualifies
   var boundaryFP = qt[qualAdv - 1].totalFP;
   var cluster = qt.filter(p => p.totalFP === boundaryFP);
@@ -357,9 +373,10 @@ function updateGroupStandings() {
 // keyed group-cutoff-{label} so each is tracked/resolved independently in
 // T.tieResolutions, unlike the single global 'qual-cutoff' key qual/Swiss
 // share.
-function detectGroupCutoffTie(label) {
-  var table = (T.groupStandings[label] || []).filter(p => p.totalFP !== null);
-  var qpg = T.cfg.qualifiersPerGroup;
+function detectGroupCutoffTie(label, state) {
+  state = state || T;
+  var table = ((state.groupStandings || {})[label] || []).filter(p => p.totalFP !== null);
+  var qpg = (state.cfg || {}).qualifiersPerGroup;
   if (!qpg || qpg >= table.length) return null; // no contested boundary — everyone scored qualifies
   var boundaryFP = table[qpg - 1].totalFP;
   var cluster = table.filter(p => p.totalFP === boundaryFP);

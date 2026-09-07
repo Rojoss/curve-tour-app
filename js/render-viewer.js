@@ -232,14 +232,28 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
       if (cluster) cluster.players.forEach(p => tbNames.add(p.name));
     });
 
+    // Unresolved-tie indicator (new): per-room ties AND qual/group cutoff
+    // ties, both surfaced via the now state-parameterized getAllTies()/
+    // isTieResolved() so this is safe to call from Archive's read-only
+    // snapshot render too, without mutating live T — see "Bracket:
+    // unresolved-tie indicator" in HANDOFF_LOG.md.
+    var allTies = getAllTies(ri, round, state);
+    var unresolvedTieNames = new Set();
+    Object.keys(allTies).forEach(k => {
+      if (isTieResolved(k, allTies[k], state)) return;
+      allTies[k].players.forEach(p => unresolvedTieNames.add(p.name));
+    });
+
     var rLabel = roundLabels[ri].label;
     var hdrAccentCls = roundLabels[ri].hdrAccentCls;
-    // Past rounds only: renderBracket() is the only caller that ever passes
-    // a collapseMap, and only ever includes entries for ri < curRound — so a
-    // current/future round has no key here at all and gets no collapsible
-    // class or onclick, not just collapsed=false (see HANDOFF.md "Design
-    // intent for viewer-facing tabs": future rounds are never a candidate
-    // for collapsing, not even manually).
+    // renderBracketNow() is the only caller that ever passes a collapseMap,
+    // and it now includes an entry for EVERY round (2026-09-07) — so any
+    // round can be folded manually, current and future included. Archive's
+    // own buildBracketHtml(snap) call passes no collapseMap at all, so
+    // nothing is collapsible there, which is still correct: an archived
+    // tournament has no per-browser collapse state to toggle against. What's
+    // collapsed by DEFAULT is still past-round-biased — see
+    // bracketRoundDefaultCollapsed().
     var isCollapsible = collapseMap && collapseMap.hasOwnProperty(ri);
     var isCollapsed = isCollapsible && collapseMap[ri];
     // Emitted regardless of collapsed state — the whole point is to mark a
@@ -256,7 +270,7 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     html += '<div class="bracket-round-body">';
 
     if (!asgn.length) {
-      html += `<div style="color:var(--muted);font-size:12px">Not yet seeded</div>`;
+      html += buildPlaceholderRoundHtml(state, round);
     } else {
       // Byte-identical to renderAdminRound()'s own routing condition
       // (js/render-admin.js) and to bracketScoreEntryAllowed()'s Mechanism-A/B
@@ -303,6 +317,12 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
           // here but did actually advance via this mechanism.
           var cls = showResults ? (isLL ? 'lucky' : adv ? 'adv' : 'elim') : '';
           var tbBadge = showResults && isTB ? ' <span class="bracket-tb-badge" title="Tie-break resolved this round">⚖ TB</span>' : '';
+          // showResults-gated, same as tbBadge above — a partially-scored
+          // room shouldn't leak an unresolved-tie marker before the room is
+          // even complete enough to know who's actually tied.
+          var isPendingTie = showResults && unresolvedTieNames.has(p.name);
+          var pendingCls = isPendingTie ? ' tie-pending' : '';
+          var pendingBadge = isPendingTie ? ' <span class="bracket-tie-pending-badge" title="Tie-break not yet resolved">⚠ TB?</span>' : '';
           var followedCls = follow && follow.key === p.name ? ' is-followed' : '';
           var editableCls = rowsEditable ? ' is-editable' : '';
           var scoreKey = `r${ri}-rm${rm}-p${p.pi}`;
@@ -329,9 +349,9 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
               }
               scoreCellsHtml = `<div class="bracket-team-scores">${cells.join('')}</div>`;
             }
-            html += `<div class="bracket-team-row ${cls}${followedCls}${editableCls}">
+            html += `<div class="bracket-team-row ${cls}${followedCls}${editableCls}${pendingCls}">
               <div class="bracket-team-line1">
-                <span class="bracket-team-name">${showResults && isLL ? '★ ' : ''}${esc(info.label)}${tbBadge}</span>
+                <span class="bracket-team-name">${showResults && isLL ? '★ ' : ''}${esc(info.label)}${tbBadge}${pendingBadge}</span>
                 ${showResults ? `<span class="bracket-score">${p.score}</span>` : ''}
               </div>
               <div class="bracket-team-members">${markedMemberNames(state, p.name, ri, info.members || []).join(', ')}</div>
@@ -346,8 +366,8 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
             } else {
               indivScoreHtml = showResults ? `<span class="bracket-score">${p.score}</span>` : '';
             }
-            html += `<div class="bracket-player-row ${cls}${followedCls}${editableCls}">
-              <span>${showResults && isLL ? '★ ' : ''}${renderUnitCell(state, p.name, false)}${tbBadge}</span>
+            html += `<div class="bracket-player-row ${cls}${followedCls}${editableCls}${pendingCls}">
+              <span>${showResults && isLL ? '★ ' : ''}${renderUnitCell(state, p.name, false)}${tbBadge}${pendingBadge}</span>
               ${indivScoreHtml}
             </div>`;
           }
@@ -367,6 +387,39 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     }
     html += '</div></div>'; // close bracket-round-body, then bracket-round-col
   });
+  return html;
+}
+
+// Uniform generic placeholder for a round nobody has been seeded into yet
+// (every round beyond wherever the tournament has actually reached — only
+// round 0's assignments are populated at generation time; advanceRound()
+// fills in each later round's state.assignments[ri] live). Deliberately
+// shows dashed empty slots for every format, never a real projected
+// matchup — group-stage's real pairings and double-elimination's WB/LB
+// routing ARE technically knowable ahead of time, but the organiser asked
+// for placeholders "instead of players' names," not a projection engine.
+// Pure function of its two arguments (esc()/roomLabel() are its only
+// helpers, both already pure) — preserves buildBracketHtml(snap)'s
+// Archive-purity guarantee exactly like the rest of this file.
+function buildPlaceholderRoundHtml(state, round) {
+  var rooms = (round && round.rooms) || [];
+  if (!rooms.length) return `<div style="color:var(--muted);font-size:12px">Not yet seeded</div>`; // defensive fallback; should be unreachable — every generated round has .rooms populated
+
+  var html = '';
+  for (var rm = 1; rm <= rooms.length; rm++) {
+    var heading = (round.isGroupStage && round.roomGroups)
+      ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm)
+      : 'Room ' + roomLabel(rm);
+    html += `<div class="bracket-room-group"><div class="bracket-room-label">${heading}</div>`;
+    var slots = rooms[rm - 1] || 0;
+    for (var s = 0; s < slots; s++) html += `<div class="bracket-placeholder-row"><span>—</span></div>`;
+    html += '</div>';
+  }
+  // Swiss round 2+ only: room COUNT is a real projection, but WHICH units
+  // land where is decided live via swissFoldPair() off standings that don't
+  // exist yet — same distinction renderPreview() already makes for this
+  // exact flag (js/render-admin.js). Never imply a fixed pairing here.
+  if (round.pairingTBD) html += `<div class="bracket-placeholder-note">Pairings determined live</div>`;
   return html;
 }
 
@@ -710,11 +763,15 @@ function renderBracketNow(scrollToFollowed) {
   document.getElementById('br-empty').style.display = 'none';
   document.getElementById('br-content').style.display = 'block';
   var follow = bracketFollowStatus(T, getFollowedUnit());
-  // Only past rounds ever get a collapseMap entry — current/future rounds
-  // are structurally incapable of collapsing, not just collapsed=false by
-  // default (see buildBracketHtml's isCollapsible check).
+  // EVERY round gets a collapseMap entry, which is what makes it collapsible
+  // at all (see buildBracketHtml's collapseMap.hasOwnProperty(ri) check) —
+  // a viewer can manually fold the current round and any future one too, not
+  // just past rounds (2026-09-07). What's collapsed BY DEFAULT is unchanged:
+  // bracketRoundDefaultCollapsed() is `ri < curRound - 1`, which already
+  // returns false for the current round and every future one — this loop
+  // simply starts consulting it for them too.
   var collapseMap = {};
-  for (var ri = 0; ri < T.curRound; ri++) collapseMap[ri] = isBracketRoundCollapsed(ri, T);
+  for (var ri = 0; ri < T.rounds.length; ri++) collapseMap[ri] = isBracketRoundCollapsed(ri, T);
   document.getElementById('br-follow-banner').innerHTML = buildFollowBannerHtml(T, follow);
   document.getElementById('br-rounds').innerHTML = buildBracketHtml(T, collapseMap, follow, bracketScoreEntryAllowed(T));
   syncFollowInputValue(follow);
@@ -1126,10 +1183,10 @@ async function buildRankingsImageCanvas(state) {
   // Header: logo, player/round count, tournament title, section label
   ctx.font = '700 22px Rajdhani';
   ctx.fillStyle = RANK_IMG_COLORS.cyan;
-  ctx.fillText('CURVE', padX, padTop + 18);
-  var curveW = ctx.measureText('CURVE ').width;
+  ctx.fillText('CFP', padX, padTop + 18);
+  var brandW = ctx.measureText('CFP ').width;
   ctx.fillStyle = RANK_IMG_COLORS.text;
-  ctx.fillText('FFA', padX + curveW, padTop + 18);
+  ctx.fillText('TOUR HUB', padX + brandW, padTop + 18);
 
   ctx.font = '500 12px Inter';
   ctx.fillStyle = RANK_IMG_COLORS.muted;
@@ -1178,7 +1235,7 @@ async function buildRankingsImageCanvas(state) {
   ctx.font = '500 10px Inter';
   ctx.fillStyle = RANK_IMG_COLORS.muted;
   ctx.textAlign = 'center';
-  ctx.fillText('Generated by Curve FFA Tournament · ' + new Date().toLocaleDateString(), W / 2, y + 22);
+  ctx.fillText('Generated by Curve Fever Pro Tour Hub · ' + new Date().toLocaleDateString(), W / 2, y + 22);
   ctx.textAlign = 'left';
 
   return canvas;

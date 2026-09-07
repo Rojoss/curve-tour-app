@@ -94,19 +94,19 @@ function toggleFormatFields() {
   // instead of silently under-representing what parseTeamLines() expects.
   var memberPlaceholders = [];
   for (var mi = 0; mi < (format.teamSize || 0); mi++) memberPlaceholders.push('Player' + (mi + 1));
-  var memberHint = memberPlaceholders.join(' | ');
+  var memberHint = memberPlaceholders.join(', ');
   document.getElementById('roster-title-hint').textContent = isTeam
-    ? '— confirmed teams, one per line: TeamName | ' + memberHint
+    ? '— confirmed teams, one per line: TeamName, ' + memberHint
     : '— confirmed players, one per line';
   document.getElementById('reserves-title-hint').textContent = isTeam
-    ? '— reserve teams, one per line: TeamName | ' + memberHint
+    ? '— reserve teams, one per line: TeamName, ' + memberHint
     : '— one per line';
   document.getElementById('cfg-roster').placeholder = isTeam
-    ? 'Team Rocket | ' + memberPlaceholders.map((p,i)=>i===0?'Ash (uid_ash01)':i===1?'Misty (uid_misty02)':p).join(' | ') +
-      '\nGary\'s Gang | ' + memberPlaceholders.map((p,i)=>i===0?'Gary (uid_gary03)':i===1?'Brock':p).join(' | ') + '\n...'
+    ? 'Team Rocket, ' + memberPlaceholders.map((p,i)=>i===0?'Ash (uid_ash01)':i===1?'Misty (uid_misty02)':p).join(', ') +
+      '\nGary\'s Gang, ' + memberPlaceholders.map((p,i)=>i===0?'Gary (uid_gary03)':i===1?'Brock':p).join(', ') + '\n...'
     : 'Harald\nLagtop\nArisu\n...';
   document.getElementById('cfg-reserves').placeholder = isTeam
-    ? 'Reserve Squad | ' + memberHint + '\n...'
+    ? 'Reserve Squad, ' + memberHint + '\n...'
     : 'ReservePlayer1\nReservePlayer2\n...';
   document.getElementById('field-reserve-individuals').style.display = isTeam ? 'block' : 'none';
 
@@ -184,7 +184,7 @@ function parseMemberLine(s) {
   return userId ? { name, userId } : { name };
 }
 
-// Parses "TeamName | Player1 | Player2" lines into team objects with a
+// Parses "TeamName, Player1, Player2" lines into team objects with a
 // stable teamId (generated the same way T.tournamentId is — timestamp-based,
 // with an index suffix so a whole batch parsed in the same millisecond still
 // gets unique ids). members is always exactly `teamSize` long, padded with
@@ -195,7 +195,7 @@ function parseMemberLine(s) {
 function parseTeamLines(raw, idPrefix, teamSize) {
   var lines = raw ? raw.split('\n').map(s => s.trim()).filter(Boolean) : [];
   return lines.map((line, idx) => {
-    var parts = line.split('|').map(s => s.trim());
+    var parts = line.split(',').map(s => s.trim());
     var teamName = parts[0] || ('Unnamed Team ' + (idx + 1));
     var rawMembers = parts.slice(1).filter(Boolean).map(parseMemberLine);
     var members = [];
@@ -206,7 +206,7 @@ function parseTeamLines(raw, idPrefix, teamSize) {
 
 // --- Roster & Player Management: initial roster load ---
 // Branches on the selected format's teamSize: team formats parse roster/
-// reserve lines as "TeamName | P1 | P2" into team objects (see
+// reserve lines as "TeamName, P1, P2" into team objects (see
 // parseTeamLines) and additionally load the individual-reserves textarea;
 // individual formats parse flat one-name-per-line exactly as before.
 function loadRoster() {
@@ -225,7 +225,7 @@ function loadRoster() {
     // existing "fill later" flow) is untouched.
     var emptyTeams = parsedPlayers.concat(parsedReserves).filter(t => t.members.every(m => !m));
     if (emptyTeams.length) {
-      alert('These team(s) have no players listed at all — add at least one "TeamName | Player1 | ..." member, or remove the line:\n\n' + emptyTeams.map(t => t.teamName).join('\n'));
+      alert('These team(s) have no players listed at all — add at least one "TeamName, Player1, ..." member, or remove the line:\n\n' + emptyTeams.map(t => t.teamName).join('\n'));
       return;
     }
     T.players  = parsedPlayers;
@@ -1238,7 +1238,7 @@ function swapTeam(oldTeamId) {
 }
 
 // Shared by swapTeam()'s walk-up path — one prompt() using the exact
-// "TeamName | P1 | P2" syntax already taught at setup (toggleFormatFields()),
+// "TeamName, P1, P2" syntax already taught at setup (toggleFormatFields()),
 // parsed via the same parseTeamLines() setup itself uses, rather than a
 // per-member prompt loop: one cancel point instead of teamSize+1, and zero
 // new parsing/ID-generation code to get wrong. A short line pads with null
@@ -1248,8 +1248,8 @@ function swapTeam(oldTeamId) {
 function promptWalkupTeam(teamSize) {
   var memberPlaceholders = [];
   for (var mi = 0; mi < teamSize; mi++) memberPlaceholders.push('Player' + (mi + 1));
-  var memberHint = memberPlaceholders.join(' | ');
-  var line = prompt('Enter the replacement team, same format as the roster:\n\nTeamName | ' + memberHint, 'Team name | ' + memberHint);
+  var memberHint = memberPlaceholders.join(', ');
+  var line = prompt('Enter the replacement team, same format as the roster:\n\nTeamName, ' + memberHint, 'Team name, ' + memberHint);
   if (line === null) return null;
   line = line.trim();
   if (!line) return null;
