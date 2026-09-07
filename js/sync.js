@@ -82,8 +82,20 @@ var syncDirtyFinalScoreKeys = new Set();
 // panel for an already-generated tournament restored from localStorage, so
 // the organiser doesn't have to regenerate just to get their link back —
 // and (re)subscribes to live updates from other writers on that tournament.
+//
+// Gated on T.started, not just T.tournamentId — matching the #sync-status-
+// panel container itself, which lives inside #panel-running and is already
+// only ever shown once a tournament is started (see index.html). Without
+// this, T.tournamentId (set the moment a schedule is generated, long before
+// Start, and never cleared except by Reset) would rewrite the address bar
+// on EVERY plain visit to the bare root URL from any browser that has ever
+// generated so much as an unstarted preview — a real, reported bug: opening
+// the plain root URL silently redirected to an old, never-started test
+// tournament's ?t= link, which then rendered as a near-empty, unseeded
+// bracket that looked like "an old version of the site" even though the
+// code being served was current the whole time.
 function initWriterMode() {
-  if (T.tournamentId) updateSyncUrlBar();
+  if (T.tournamentId && T.started) updateSyncUrlBar();
   renderSyncStatusPanel();
   startWriterListener();
 }
