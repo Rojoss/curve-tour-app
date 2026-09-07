@@ -165,25 +165,41 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .bracket-follow-pill.is-out strong{color:var(--muted)}
 .bracket-follow-clear{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px 6px;border-radius:50%;font-family:var(--font-u)}
 .bracket-follow-clear:hover{color:var(--text);background:var(--surface2)}
-.bracket-scroll{display:flex;gap:16px;overflow-x:auto;padding-bottom:12px}
-.bracket-round-col{width:200px;min-width:200px;flex-shrink:0;transition:width .18s ease,min-width .18s ease}
+.bracket-scroll{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px}
+/* Column-as-card, replicating the validated "Collapsible columns +
+   decluttered rooms" mockup: each round is its own bordered/rounded card
+   (background:var(--surface), matching this app's own existing .card
+   pattern — not the mockup's invented 3rd surface tier, which this app has
+   no token for) rather than a bare label floating on the page background.
+   overflow:hidden lets the header's top corners inherit the card's own
+   border-radius for free. */
+.bracket-round-col{width:200px;min-width:200px;flex-shrink:0;transition:width .18s ease,min-width .18s ease;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .bracket-round-col.is-collapsed{width:34px;min-width:34px}
-.bracket-round-hdr{font-family:var(--font-d);font-size:13px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.bracket-round-col.current-col{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan-dim)}
+/* Header is now a two-tone bar atop the card (surface2, one shade lighter
+   than the card's own surface background) rather than a bare label with
+   just a bottom rule — the mockup's header/body split, using this app's
+   existing two-surface vocabulary instead of importing a third tier. */
+.bracket-round-hdr{font-family:var(--font-d);font-size:12px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--surface2)}
 .bracket-round-hdr.current-hdr{color:var(--cyan)}
 /* Double-elimination column accents — a colored top border per bracket so a
    viewer can tell WB/LB/grand-final columns apart at a glance (see "Double
    elimination" Part 5 in HANDOFF.md). Unaffected by the collapsed/vertical
    treatment below since border-top stays a physical top edge either way. */
-.bracket-round-hdr.wb-hdr{border-top:2px solid var(--green);padding-top:4px}
-.bracket-round-hdr.lb-hdr{border-top:2px solid var(--amber);padding-top:4px}
-.bracket-round-hdr.gf-hdr{border-top:2px solid var(--purple);padding-top:4px}
+.bracket-round-hdr.wb-hdr{border-top:2px solid var(--green)}
+.bracket-round-hdr.lb-hdr{border-top:2px solid var(--amber)}
+.bracket-round-hdr.gf-hdr{border-top:2px solid var(--purple)}
 /* Collapse toggle — only past rounds ever get the .collapsible class
    (current/future rounds are never clickable, see buildBracketHtml). */
 .bracket-round-hdr.collapsible{cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px}
 .bracket-round-hdr.collapsible:hover{color:var(--text)}
 .bracket-collapse-chevron{display:inline-block;font-size:10px;flex-shrink:0;transition:transform .15s ease}
 .bracket-round-hdr.collapsible:not(.is-collapsed) .bracket-collapse-chevron{transform:rotate(90deg)}
-.bracket-round-col.is-collapsed .bracket-round-hdr{writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;height:180px;margin-bottom:0;padding:8px 0 8px 2px}
+/* Collapsed strip — deliberately top-anchored (fixed height, not stretched/
+   centered like the mockup's justify-content:center treatment): organiser
+   preference, confirmed directly, kept from the already-shipped behavior
+   rather than adopted from the mockup on this one point. */
+.bracket-round-col.is-collapsed .bracket-round-hdr{writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;height:180px;padding:8px 0 8px 2px;border-bottom:none}
 .bracket-round-col.is-collapsed .bracket-round-hdr .bracket-collapse-chevron{writing-mode:horizontal-tb;transform:rotate(180deg)}
 /* "Follow a player" indicator on a round header — see toggleBracketCollapse
    and buildFollowBannerHtml (js/render-viewer.js). Deliberately only ever a
@@ -191,14 +207,19 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    (organiser's choice — "indicator only", not auto-expand). */
 .bracket-round-hdr.has-followed{color:var(--cyan)}
 .bracket-round-hdr.has-followed .bracket-collapse-chevron{color:var(--cyan)}
+.bracket-round-body{padding:9px}
 
 /* Room grouping — a plain label + a left-border colour accent per row
    instead of a boxed card per room (same accent pattern already used for
    Rankings' .rk-row), so a column with many stacked rooms (a large field's
-   early rounds) reads at a glance without the extra chrome. */
-.bracket-room-group{margin-bottom:10px}
-.bracket-room-label{font-family:var(--font-d);font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;padding-left:2px}
-.bracket-player-row{padding:4px 8px 4px 10px;font-size:12px;border-left:3px solid transparent;display:flex;align-items:center;gap:6px}
+   early rounds) reads at a glance without the extra chrome. Rows are now
+   individually soft-rounded chips (border-radius:4px, tighter padding),
+   matching the mockup's decluttered-row treatment more closely than the
+   original flush-left-bar version. */
+.bracket-room-group{margin-bottom:9px}
+.bracket-room-group:last-child{margin-bottom:0}
+.bracket-room-label{font-family:var(--font-d);font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;padding-left:2px}
+.bracket-player-row{padding:3.5px 7px;font-size:11.5px;border-left:3px solid transparent;border-radius:4px;display:flex;align-items:center;gap:6px}
 .bracket-player-row.adv{border-left-color:var(--green);color:var(--green)}
 .bracket-player-row.elim{border-left-color:var(--border);color:var(--muted);text-decoration:line-through;opacity:.5}
 .bracket-player-row.lucky{border-left-color:var(--purple);color:var(--purple)}
@@ -206,8 +227,10 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    NEVER border-left-color: the left border already carries the adv/elim/
    lucky result signal, so overriding it here would destroy that instead of
    adding to it. #00E5FF44 matches the raw-alpha convention already used a
-   few lines down for .bracket-tb-badge's #FFB83022. */
-.bracket-player-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44;border-radius:0 6px 6px 0}
+   few lines down for .bracket-tb-badge's #FFB83022. Row already carries its
+   own border-radius:4px on all corners now, so no asymmetric override is
+   needed here the way the old flush-left-bar version required. */
+.bracket-player-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44}
 .bracket-player-row.elim.is-followed{opacity:.75}
 .bracket-score{margin-left:auto;font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--muted)}
 .bracket-tb-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--amber);background:#FFB83022;padding:1px 5px;border-radius:8px;margin-left:2px;vertical-align:middle}
@@ -219,7 +242,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    long names simply makes its row taller. The left-border accent goes on
    the whole block so it's visible regardless of which line the eye is on;
    .bracket-team-name keeps its own text-color rule below unchanged. */
-.bracket-team-row,.bracket-final-row{padding:4px 8px 4px 10px;font-size:12px;border-left:3px solid transparent}
+.bracket-team-row,.bracket-final-row{padding:3.5px 7px;font-size:11.5px;border-left:3px solid transparent;border-radius:4px}
 .bracket-team-row.adv,.bracket-final-row.adv{border-left-color:var(--green)}
 .bracket-team-row.elim{border-left-color:var(--border);opacity:.5}
 .bracket-team-row.lucky{border-left-color:var(--purple)}
@@ -233,7 +256,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
    above; the background covers the whole two-line block (line1 + members)
    with no extra rules needed, and resolving by a member's name still
    highlights the whole team, not just that member's name individually. */
-.bracket-team-row.is-followed,.bracket-final-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44;border-radius:0 6px 6px 0}
+.bracket-team-row.is-followed,.bracket-final-row.is-followed{background:var(--cyan-dim);box-shadow:inset 0 0 0 1px #00E5FF44}
 .bracket-team-row.elim.is-followed{opacity:.75}
 
 /* Score entry from Bracket (admin-unlocked, current round only — see
@@ -289,8 +312,11 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 
 /* Bracket bye card ("Bye" odd-count strategy) — a round's bye recipient
    doesn't belong to any room, so it gets its own small card instead of a row
-   inside a .bracket-room-group, rendered after that round's real rooms. */
-.bracket-bye-card{background:var(--surface);border:1px dashed var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--amber)}
+   inside a .bracket-room-group, rendered after that round's real rooms.
+   surface2, not surface — the round column itself is surface now (see
+   .bracket-round-col above), so this needs to be a shade lighter to still
+   read as its own distinct card rather than blending into the column. */
+.bracket-bye-card{background:var(--surface2);border:1px dashed var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--amber)}
 .bracket-bye-label{font-family:var(--font-d);font-weight:700;letter-spacing:.5px;margin-right:6px}
 /* A followed unit on a bye never appears in the room loop (room:null is
    filtered out there) — without this, following someone would silently lose

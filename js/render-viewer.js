@@ -248,13 +248,15 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     // their behalf, so this class is how a collapsed round says "click me").
     var hasFollowed = follow && follow.rounds[ri];
 
-    html += `<div class="bracket-round-col${isCollapsed?' is-collapsed':''}" data-ri="${ri}">
+    html += `<div class="bracket-round-col${isCollapsed?' is-collapsed':''}${isCurrent?' current-col':''}" data-ri="${ri}">
       <div class="bracket-round-hdr${isCurrent?' current-hdr':''}${hdrAccentCls}${isCollapsible?' collapsible':''}${isCollapsed?' is-collapsed':''}${hasFollowed?' has-followed':''}"${isCollapsible?` onclick="toggleBracketCollapse(${ri})"`:''}>${isCollapsible?'<span class="bracket-collapse-chevron">▸</span>':''}${rLabel}</div>`;
 
     if (isCollapsed) { html += '</div>'; return; }
 
+    html += '<div class="bracket-round-body">';
+
     if (!asgn.length) {
-      html += `<div style="color:var(--muted);font-size:12px;padding:8px">Not yet seeded</div>`;
+      html += `<div style="color:var(--muted);font-size:12px">Not yet seeded</div>`;
     } else {
       // Byte-identical to renderAdminRound()'s own routing condition
       // (js/render-admin.js) and to bracketScoreEntryAllowed()'s Mechanism-A/B
@@ -363,7 +365,7 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
         });
       }
     }
-    html += '</div>';
+    html += '</div></div>'; // close bracket-round-body, then bracket-round-col
   });
   return html;
 }
