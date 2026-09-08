@@ -288,6 +288,13 @@ function renderRooms(ri, round, asgn, formatDescriptor) {
   formatDescriptor = formatDescriptor || getGamemodeDescriptor().format;
   var lls = computeLuckyLosers(ri, round);
   var teamSize = formatDescriptor.teamSize;
+  // Multi-game Semis (2026-09-08, "Multi-game Semis" in HANDOFF_LOG.md) — a
+  // room-based round's Score cell renders numGames small inputs + a running
+  // total instead of one input, when this round is multi-game. numGames===1
+  // (the overwhelming majority of rounds, and every round before this
+  // feature existed) takes the exact original single-input path, unchanged.
+  var numGames = round.numGames > 1 ? round.numGames : 1;
+  var scoreColWidth = numGames > 1 ? (teamSize ? 90 + 44 * numGames : 60 + 50 * numGames) : (teamSize ? 150 : 110);
   var html = '';
   for (var rm = 1; rm <= round.rooms.length; rm++) {
     var players = asgn.filter(a => a.room === rm);
@@ -300,7 +307,7 @@ function renderRooms(ri, round, asgn, formatDescriptor) {
         <div class="room-meta">${players.length} ${esc(formatDescriptor.unitLabelPlural.toLowerCase())} · top ${round.isNoElim?'all':thisAdv} advance directly${round.luckyCount?' + lucky losers':''}</div>
       </div>
       <table><thead><tr><th style="width:44px">Pos</th><th>${esc(formatDescriptor.unitLabel)}</th>
-      <th style="width:${teamSize?150:110}px">Score</th><th style="width:120px">Status</th></tr></thead><tbody>`;
+      <th style="width:${scoreColWidth}px">Score${numGames>1?' ('+numGames+' games)':''}</th><th style="width:120px">Status</th></tr></thead><tbody>`;
 
     players.forEach((p, pi) => {
       var key = `r${ri}-rm${rm}-p${pi}`;
@@ -311,23 +318,48 @@ function renderRooms(ri, round, asgn, formatDescriptor) {
         var scoreCell = [];
         for (var mi = 0; mi < teamSize; mi++) {
           var member = members[mi];
-          var mkey = `${key}-m${mi}`;
           if (!member) {
             scoreCell.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:${mi<teamSize-1?4:0}px">
               <input type="number" class="score-inp" style="width:70px" disabled placeholder="—">
               <span style="font-size:11px;color:var(--muted);font-style:italic">Vacant slot</span></div>`);
             continue;
           }
-          var mscore = T.scores[mkey] !== undefined && T.scores[mkey] !== null ? T.scores[mkey] : '';
-          scoreCell.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:${mi<teamSize-1?4:0}px">
-            <input type="number" class="score-inp" style="width:70px" value="${mscore}" min="0"
-              data-key="${mkey}" data-rm="${rm}" data-ri="${ri}" oninput="scoreChanged(this)">
-            <span style="font-size:11px;color:var(--muted)">${esc(member.name)}</span></div>`);
+          if (numGames > 1) {
+            var memberInputs = [];
+            for (var g = 1; g <= numGames; g++) {
+              var mgkey = `${key}-g${g}-m${mi}`;
+              var mgscore = T.scores[mgkey] !== undefined && T.scores[mgkey] !== null ? T.scores[mgkey] : '';
+              memberInputs.push(`<input type="number" class="score-inp" value="${mgscore}" min="0" title="Game ${g}"
+                data-key="${mgkey}" data-rm="${rm}" data-ri="${ri}" oninput="scoreChanged(this)">`);
+            }
+            scoreCell.push(`<div class="score-multi" style="margin-bottom:${mi<teamSize-1?4:0}px">${memberInputs.join('')}<span style="font-size:11px;color:var(--muted)">${esc(member.name)}</span></div>`);
+          } else {
+            var mkey = `${key}-m${mi}`;
+            var mscore = T.scores[mkey] !== undefined && T.scores[mkey] !== null ? T.scores[mkey] : '';
+            scoreCell.push(`<div style="display:flex;align-items:center;gap:6px;margin-bottom:${mi<teamSize-1?4:0}px">
+              <input type="number" class="score-inp" style="width:70px" value="${mscore}" min="0"
+                data-key="${mkey}" data-rm="${rm}" data-ri="${ri}" oninput="scoreChanged(this)">
+              <span style="font-size:11px;color:var(--muted)">${esc(member.name)}</span></div>`);
+          }
         }
+        if (numGames > 1) scoreCell.push(`<div style="margin-top:2px">Total: <span id="total-${key}" class="score-total">—</span></div>`);
         html += `<tr id="row-${key}">
           <td><span class="pos-num" id="pos-${key}">—</span></td>
           <td><strong>${esc(teamName)}</strong></td>
           <td>${scoreCell.join('')}</td>
+          <td id="stat-${key}"><span class="pill pill-neut">—</span></td></tr>`;
+      } else if (numGames > 1) {
+        var gameInputs = [];
+        for (var gg = 1; gg <= numGames; gg++) {
+          var gkey = `${key}-g${gg}`;
+          var gscore = T.scores[gkey] !== undefined && T.scores[gkey] !== null ? T.scores[gkey] : '';
+          gameInputs.push(`<input type="number" class="score-inp" value="${gscore}" min="0" title="Game ${gg}"
+            data-key="${gkey}" data-rm="${rm}" data-ri="${ri}" oninput="scoreChanged(this)">`);
+        }
+        html += `<tr id="row-${key}">
+          <td><span class="pos-num" id="pos-${key}">—</span></td>
+          <td>${esc(p.name)}</td>
+          <td><div class="score-multi">${gameInputs.join('')}<span id="total-${key}" class="score-total">—</span></div></td>
           <td id="stat-${key}"><span class="pill pill-neut">—</span></td></tr>`;
       } else {
         var score = T.scores[key] !== undefined && T.scores[key] !== null ? T.scores[key] : '';
@@ -392,9 +424,17 @@ function recalcRoom(rm, ri) {
 
   var raw = [];
   var piByName = {};
+  // Partial-sum total, tracked alongside the rank-affecting score (2026-09-08,
+  // "Multi-game Semis" in HANDOFF_LOG.md) — fallback=0 so the live #total-*
+  // display grows game by game as a multi-game room is scored, matching
+  // Bracket's own Finals total (finalsProgressState()'s identical fallback:0
+  // reasoning), rather than sitting at "—" until every game is in like the
+  // rank-affecting `parsed` (fallback=null) below correctly does.
+  var scoreByPi = {};
   asgn.forEach((p, pi) => {
     var parsed = getUnitScore(T, ri, rm, pi, null);
     piByName[p.name] = pi;
+    scoreByPi[pi] = getUnitScore(T, ri, rm, pi, 0);
     if (parsed !== null) raw.push({ pi, name: p.name, score: parsed });
   });
   var scored = orderRoomByScore(raw, ri, rm);
@@ -417,6 +457,12 @@ function recalcRoom(rm, ri) {
     var posEl = document.getElementById('pos-' + key);
     var stEl  = document.getElementById('stat-' + key);
     if (!rowEl) return;
+
+    // Multi-game Semis running total — present only when this round is
+    // multi-game (renderRooms() only emits the element then); updates live,
+    // including while still partially scored.
+    var totalEl = document.getElementById('total-' + key);
+    if (totalEl) totalEl.textContent = scoreByPi[pi];
 
     rowEl.className = '';
     if (rank === undefined) {

@@ -101,6 +101,7 @@ function saveState() {
       roundRobinMode: document.getElementById('cfg-round-robin-mode').value,
       qualifiersPerGroup: document.getElementById('cfg-qualifiers-per-group').value,
       finalsGames: document.getElementById('cfg-finals-games').value,
+      semisGames: document.getElementById('cfg-semis-games').value,
       grandFinalWbTarget: document.getElementById('cfg-grand-final-wb-target').value,
       grandFinalLbTarget: document.getElementById('cfg-grand-final-lb-target').value,
       semisOverride: document.getElementById('cfg-semis-override').value,
@@ -145,6 +146,7 @@ function loadState() {
     if (s.roundRobinMode !== undefined) document.getElementById('cfg-round-robin-mode').value = s.roundRobinMode;
     if (s.qualifiersPerGroup !== undefined) document.getElementById('cfg-qualifiers-per-group').value = s.qualifiersPerGroup;
     if (s.finalsGames !== undefined) document.getElementById('cfg-finals-games').value = s.finalsGames;
+    if (s.semisGames !== undefined) document.getElementById('cfg-semis-games').value = s.semisGames;
     if (s.grandFinalWbTarget !== undefined) document.getElementById('cfg-grand-final-wb-target').value = s.grandFinalWbTarget;
     if (s.grandFinalLbTarget !== undefined) document.getElementById('cfg-grand-final-lb-target').value = s.grandFinalLbTarget;
     if (s.semisOverride !== undefined) document.getElementById('cfg-semis-override').value = s.semisOverride;

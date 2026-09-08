@@ -37,6 +37,10 @@ function toggleScheduleLogicFields() {
   // double-elimination variant has a "Semis" round concept at all, so the
   // field would do nothing there and is hidden to avoid implying otherwise.
   document.getElementById('field-semis-override').style.display = isSingleElim ? 'block' : 'none';
+  // Semis format (2026-09-08, "Multi-game Semis" in HANDOFF_LOG.md) — same
+  // gate as the override just above, for the same reason (Semis only exists
+  // under single-elimination).
+  document.getElementById('field-semis-games').style.display = isSingleElim ? 'block' : 'none';
   // Final headcount override — meaningful for single-elimination AND the
   // shared-final generalization (both read gamemodeConfig.finalSize); NOT
   // for 'double-elimination', whose Grand Final is sized by the race targets
@@ -401,7 +405,12 @@ function proceedGenerateSchedule() {
     roundRobinMode: document.getElementById('cfg-round-robin-mode').value,
     qualifiersPerGroup: parseInt(document.getElementById('cfg-qualifiers-per-group').value) || 2,
     scoring: document.getElementById('cfg-scoring').value,
-    finalsGames: parseInt(document.getElementById('cfg-finals-games').value) || 3
+    finalsGames: parseInt(document.getElementById('cfg-finals-games').value) || 3,
+    // Default 1 (Single game), NOT finalsGames' own default of 3 — this is
+    // a new opt-in capability, and 1 reproduces today's exact behaviour for
+    // anyone who never touches the field (2026-09-08, "Multi-game Semis" in
+    // HANDOFF_LOG.md).
+    semisGames: parseInt(document.getElementById('cfg-semis-games').value) || 1
   };
   // Group stage's own two explicit requirements (Part 1 of "Group stage" in
   // HANDOFF.md): a group below 3 can't round-robin meaningfully, and a
@@ -624,6 +633,7 @@ function proceedGenerateSchedule() {
   T.gamemodeConfig.poolingPhase = cfg.poolingPhase;
   T.gamemodeConfig.bracketPhase = T.scheduleLogic;
   T.gamemodeConfig.finalsGames = cfg.finalsGames;
+  T.gamemodeConfig.semisGames = cfg.semisGames;
   // Double-elimination's grand-final race targets (see "Grand-final race
   // format" in HANDOFF.md) — read regardless of whether double-elimination
   // is actually selected, same "harmless, unused otherwise" pattern as
@@ -1084,14 +1094,21 @@ function removeTeam(teamId) {
       var room = roomOfTeam.room;
       var roomTeams = asgn.filter(a => a.room === room);
       var pi = roomTeams.findIndex(a => a.name === teamId);
+      // scoreKeysForPosition() (js/formats-and-primitives.js) covers every
+      // game of a multi-game Semis round, not just one key per member — a
+      // plain single-key shift here would silently strand games 2+'s scores
+      // under the old position once this round can be multi-game (2026-09-08,
+      // "Multi-game Semis" in HANDOFF_LOG.md).
+      var round = T.rounds[ri];
       for (var k = pi + 1; k < roomTeams.length; k++) {
-        for (var mi = 0; mi < teamSize; mi++) {
-          var fromKey = `r${ri}-rm${room}-p${k}-m${mi}`, toKey = `r${ri}-rm${room}-p${k - 1}-m${mi}`;
-          if (T.scores[fromKey] !== undefined) T.scores[toKey] = T.scores[fromKey];
-          else delete T.scores[toKey];
+        var fromKeys = scoreKeysForPosition(ri, room, k, round, teamSize);
+        var toKeys = scoreKeysForPosition(ri, room, k - 1, round, teamSize);
+        for (var ki = 0; ki < fromKeys.length; ki++) {
+          if (T.scores[fromKeys[ki]] !== undefined) T.scores[toKeys[ki]] = T.scores[fromKeys[ki]];
+          else delete T.scores[toKeys[ki]];
         }
       }
-      for (var mi2 = 0; mi2 < teamSize; mi2++) delete T.scores[`r${ri}-rm${room}-p${roomTeams.length - 1}-m${mi2}`];
+      scoreKeysForPosition(ri, room, roomTeams.length - 1, round, teamSize).forEach(k => delete T.scores[k]);
       T.assignments[ri] = asgn.filter(a => a.name !== teamId);
       invalidateStaleTieResolutions(ri, room);
     }
@@ -1195,8 +1212,11 @@ function swapPlayer(oldName) {
   // Reserves don't inherit scores from players they replace (see "Reserve
   // players" in HANDOFF.md) — the same rule applies to a swap: the outgoing
   // player's already-entered score at this position, if any, is cleared
-  // rather than silently becoming the replacement's score.
-  delete T.scores[`r${ri}-rm${room}-p${posInRoom}`];
+  // rather than silently becoming the replacement's score. Every game of a
+  // multi-game Semis round, not just game 1's key (2026-09-08, "Multi-game
+  // Semis" in HANDOFF_LOG.md) — scoreKeysForPosition() (js/formats-and-
+  // primitives.js) covers both.
+  scoreKeysForPosition(ri, room, posInRoom, T.rounds[ri], 0).forEach(k => delete T.scores[k]);
   invalidateStaleTieResolutions(ri, room);
 
   T.players = T.players.filter(p => p !== oldName).concat([newName]);
@@ -1292,9 +1312,11 @@ function swapTeam(oldTeamId) {
   // Same slot, in place — mirrors swapPlayer() exactly, not removeTeam()'s
   // repack-the-room behavior.
   asgn[entryIdx].name = newTeam.teamId;
-  // Current round's scores at this position only — every mi, same "cleared,
-  // never transferred" rule as swapPlayer()'s single delete.
-  for (var mi = 0; mi < teamSize; mi++) delete T.scores[`r${ri}-rm${room}-p${posInRoom}-m${mi}`];
+  // Current round's scores at this position only — every member, every game
+  // of a multi-game Semis round (2026-09-08, "Multi-game Semis" in
+  // HANDOFF_LOG.md), same "cleared, never transferred" rule as swapPlayer()'s
+  // own delete.
+  scoreKeysForPosition(ri, room, posInRoom, T.rounds[ri], teamSize).forEach(k => delete T.scores[k]);
   invalidateStaleTieResolutions(ri, room);
 
   T.players = T.players.filter(t => t.teamId !== oldTeamId).concat([newTeam]);
@@ -1387,12 +1409,19 @@ function removePlayer(name) {
       var room = roomOfPlayer.room;
       var roomPlayers = asgn.filter(a => a.room === room);
       var pi = roomPlayers.findIndex(a => a.name === name);
+      // Every game of a multi-game Semis round, not just game 1's key
+      // (2026-09-08, "Multi-game Semis" in HANDOFF_LOG.md) — see
+      // removeTeam()'s identical fix for the team-format equivalent.
+      var round = T.rounds[ri];
       for (var k = pi + 1; k < roomPlayers.length; k++) {
-        var fromKey = `r${ri}-rm${room}-p${k}`, toKey = `r${ri}-rm${room}-p${k - 1}`;
-        if (T.scores[fromKey] !== undefined) T.scores[toKey] = T.scores[fromKey];
-        else delete T.scores[toKey];
+        var fromKeys = scoreKeysForPosition(ri, room, k, round, 0);
+        var toKeys = scoreKeysForPosition(ri, room, k - 1, round, 0);
+        for (var ki = 0; ki < fromKeys.length; ki++) {
+          if (T.scores[fromKeys[ki]] !== undefined) T.scores[toKeys[ki]] = T.scores[fromKeys[ki]];
+          else delete T.scores[toKeys[ki]];
+        }
       }
-      delete T.scores[`r${ri}-rm${room}-p${roomPlayers.length - 1}`];
+      scoreKeysForPosition(ri, room, roomPlayers.length - 1, round, 0).forEach(k => delete T.scores[k]);
       T.assignments[ri] = asgn.filter(a => a.name !== name);
       invalidateStaleTieResolutions(ri, room);
     }

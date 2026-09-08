@@ -143,6 +143,14 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .game-tab{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted)}
 .game-tab.active{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan)}
 
+/* Multi-game Semis — a room-based round's Score cell gets numGames small
+   inputs + a running total instead of one input (see renderRooms()), a
+   compact extension of the same "stack multiple mini-inputs in one cell"
+   pattern this table already uses for team-member sub-scores. */
+.score-multi{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.score-multi input[type=number].score-inp{width:46px;font-size:13px;font-weight:700;padding:2px 4px}
+.score-total{font-family:var(--font-d);font-size:14px;font-weight:700;color:var(--cyan);margin-left:2px}
+
 /* Bracket overview */
 /* "Follow a player" search bar — sits above the legend/scroller. The input
    needs an explicit max-width since the global input[type=text] rule below
@@ -490,6 +498,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
           <label>Semis size override (optional)</label>
           <input type="number" id="cfg-semis-override" placeholder="derived" min="1">
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Leave blank to use the derived default. A headcount only — room shape/count is still figured out automatically within the format's normal range.</div></div>
+        <div class="field" id="field-semis-games" style="display:none"><label>Semis format</label>
+          <select id="cfg-semis-games">
+            <option value="1" selected>Single game</option>
+            <option value="2">2 games (sum)</option>
+            <option value="3">3 games (sum)</option>
+            <option value="4">4 games (sum)</option>
+          </select></div>
         <div class="field" id="field-lb-qualifiers" style="display:none">
           <label>LB qualifiers into the Final</label>
           <input type="number" id="cfg-lb-qualifiers" value="2" min="1">

@@ -296,20 +296,28 @@ function renderUnitCell(state, key, withMembers, ri) {
   return html;
 }
 
-// Reads the score for room-position `pi` in round `ri`/room `rm`, generic
-// across formats: for an individual format this is exactly the stored value
-// at that position (same lookup as before — byte-identical for FFA); for a
-// team format it's the DERIVED team score, computed from that position's
-// per-member scores via the active TEAM_SCORING_RULES entry. `fallback` is
-// substituted for a score not yet entered — passing null means "not fully
-// scored" propagates (any missing member blocks the team score, same as a
-// missing individual score blocks an FFA player's); passing a number (e.g.
-// 0) fills missing members with that value instead, for a live/partial
-// computation that still wants something to show.
-function getUnitScore(state, ri, rm, pi, fallback) {
+// Reads the score for room-position `pi` in round `ri`/room `rm`, for ONE
+// specific game `g` of a (possibly multi-game) round — `g === null` reads
+// the plain, ungamed key exactly as this function's logic always has (byte-
+// identical key for every round that's never multi-game, which today is
+// still every round except a "Semis format"/"Finals format" > 1 games
+// round). This is getUnitScore()'s per-game building block, extracted
+// (2026-09-08, "Multi-game Semis" in HANDOFF_LOG.md) so a multi-game round
+// can sum over it without duplicating the individual/team branching logic
+// below. Generic across formats: for an individual format this is exactly
+// the stored value at that position; for a team format it's the DERIVED
+// team score for that one game, computed from that position's per-member
+// scores via the active TEAM_SCORING_RULES entry. `fallback` is substituted
+// for a score not yet entered — passing null means "not fully scored"
+// propagates (any missing member blocks the team score, same as a missing
+// individual score blocks an FFA player's); passing a number (e.g. 0) fills
+// missing members with that value instead, for a live/partial computation
+// that still wants something to show.
+function getUnitScoreForGame(state, ri, rm, pi, g, fallback) {
   var descriptor = getGamemodeDescriptorFor(state);
   var teamSize = descriptor.format && descriptor.format.teamSize;
-  if (!teamSize) return scoreOrDefault(state.scores[`r${ri}-rm${rm}-p${pi}`], fallback);
+  var gPart = g === null ? '' : `-g${g}`;
+  if (!teamSize) return scoreOrDefault(state.scores[`r${ri}-rm${rm}-p${pi}${gPart}`], fallback);
   // A genuinely vacant slot (a member removed mid-tournament, not yet
   // replaced) contributes 0 and never blocks the team's score — only a
   // slot that HAS a member but no score entered yet counts as "missing".
@@ -318,7 +326,7 @@ function getUnitScore(state, ri, rm, pi, fallback) {
   var vals = [], anyMissing = false;
   for (var mi = 0; mi < teamSize; mi++) {
     if (!(team && team.members && team.members[mi])) { vals.push(0); continue; }
-    var v = scoreOrDefault(state.scores[`r${ri}-rm${rm}-p${pi}-m${mi}`], null);
+    var v = scoreOrDefault(state.scores[`r${ri}-rm${rm}-p${pi}${gPart}-m${mi}`], null);
     if (v === null) { anyMissing = true; v = 0; }
     vals.push(v);
   }
@@ -328,8 +336,55 @@ function getUnitScore(state, ri, rm, pi, fallback) {
   // this room's actual size, e.g. scanning a room-position that never had
   // an occupant); team is already the same `asgn[pi] &&`-guarded lookup
   // from above, and getDefenderIndex() itself tolerates a null/undefined
-  // teamId gracefully (defaults to index 0), so this never throws.
+  // teamId gracefully (defaults to index 0), so this never throws. Fixed
+  // to round `ri` regardless of which game `g` — the defender doesn't
+  // change mid-round, only between rounds (see "Defender history" in
+  // HANDOFF.md).
   return rule.computeTeamScore(vals, getDefenderIndex(state, team && team.teamId, ri));
+}
+
+// Reads a unit's TOTAL score for round ri/room rm/position pi — summed
+// across every game of the round when it's multi-game (2026-09-08, "Multi-
+// game Semis" in HANDOFF_LOG.md — today this can only be a Semis round;
+// see js/bracket-phases.js), or the single game-1 value otherwise. Every
+// existing caller (detectTieBreaks/isRoundFullyScored/computeLuckyLosers/
+// recalcRoom/orderRoomByScore's feeders/computeRankings' elimination loop)
+// already routes through this one function, so none of them needed to
+// change to become multi-game-correct — confirmed directly, not assumed.
+// `fallback` semantics generalize the per-game/per-member ones above one
+// level up: with fallback=null, ANY missing game blocks the total (not
+// just a missing team member within one game); with a number fallback
+// (e.g. 0), a missing game contributes 0 toward the sum, for the same
+// "still show something for a live/partial computation" reasoning.
+function getUnitScore(state, ri, rm, pi, fallback) {
+  var round = state.rounds && state.rounds[ri];
+  var numGames = (round && round.numGames > 1) ? round.numGames : 1;
+  if (numGames === 1) return getUnitScoreForGame(state, ri, rm, pi, null, fallback);
+  var total = 0, anyMissing = false;
+  for (var g = 1; g <= numGames; g++) {
+    var v = getUnitScoreForGame(state, ri, rm, pi, g, null);
+    if (v === null) { anyMissing = true; v = 0; }
+    total += v;
+  }
+  if (anyMissing && fallback === null) return null;
+  return total;
+}
+
+// Every T.scores key belonging to one room-position, across every game of a
+// (possibly multi-game) round — used by the roster-edit helpers that
+// repack/clear scores by position (removeTeam/swapPlayer/swapTeam/
+// removePlayer, js/generation-and-roster.js) so a later game's key moves or
+// clears together with game 1's, not just the single key those functions
+// were written against before multi-game rounds existed.
+function scoreKeysForPosition(ri, rm, pi, round, teamSize) {
+  var numGames = (round && round.numGames > 1) ? round.numGames : 1;
+  var keys = [];
+  for (var g = 1; g <= numGames; g++) {
+    var base = `r${ri}-rm${rm}-p${pi}` + (numGames > 1 ? `-g${g}` : '');
+    if (teamSize) { for (var mi = 0; mi < teamSize; mi++) keys.push(`${base}-m${mi}`); }
+    else keys.push(base);
+  }
+  return keys;
 }
 
 // Finals equivalent of getUnitScore — T.finalScores has no room/position

@@ -206,8 +206,17 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     // "editable" says the current round qualifies for score entry at all
     // (isAdminUnlocked() + started + Mechanism-A check — see
     // bracketScoreEntryAllowed()); isCurrent confines it to this one column,
-    // matching Admin's own "only the round being played" boundary.
-    var rowsEditable = !!editable && isCurrent;
+    // matching Admin's own "only the round being played" boundary. A
+    // multi-game Semis round (2026-09-08, "Multi-game Semis" in
+    // HANDOFF_LOG.md — round.isFinal excludes the Final's own, separately-
+    // handled Mechanism B) is deliberately excluded here too: without this,
+    // an admin editing from Bracket would write to the unsuffixed key
+    // getUnitScore() no longer reads once a round is multi-game, silently
+    // losing the score (it "saves" with no error, never counts toward the
+    // total). Falls back to the existing read-only display below instead —
+    // editable multi-game entry from Bracket is a deliberate follow-up, not
+    // built here, mirroring how Finals multi-game entry was Admin-only first.
+    var rowsEditable = !!editable && isCurrent && !(round.numGames > 1 && !round.isFinal);
     var isPast    = ri < state.curRound;
     // Lucky-loser record for round ri's OWN card: T.luckyLosers[X] is
     // written by whichever round's advancement fed unit(s) INTO round X —

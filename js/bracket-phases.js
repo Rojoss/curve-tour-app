@@ -291,9 +291,16 @@ function singleEliminationBracketPhase(seedTotal, startRoundNum, descriptor) {
   // (their FINAL % 2 is always 0, so this luckyCount is always 0 for them).
   var semisBaseAdv = Math.floor(FINAL / semisRooms.length);
   var semisLucky = FINAL % semisRooms.length;
+  // numGames comes from descriptor.config.semisGames (2026-09-08, "Multi-
+  // game Semis" in HANDOFF_LOG.md), mirroring the Final's own numGames
+  // below exactly — a room-based round rather than the Final's single flat
+  // pool, so its multi-game scoring lives under T.scores' own room/position
+  // keys (see getUnitScore()/getUnitScoreForGame() in js/formats-and-
+  // primitives.js), not T.finalScores.
   rounds.push({ roundNum: semisRound, players: SEMIS, rooms: semisRooms, byeCount: 0,
     isQual:false, isNoElim:false, isSemis:true, isFinal:false,
-    advPerRoom: semisBaseAdv, advTotal: FINAL, luckyCount: semisLucky });
+    advPerRoom: semisBaseAdv, advTotal: FINAL, luckyCount: semisLucky,
+    numGames: descriptor.config.semisGames });
 
   // numGames comes from descriptor.config.finalsGames (populated at
   // generation time from cfg.finalsGames — see proceedGenerateSchedule())
