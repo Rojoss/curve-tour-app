@@ -265,7 +265,7 @@ function updateQualTable() {
 
       scored.forEach((p, idx) => {
         var rank = idx + 1;
-        var fp = T.cfg.scoring === 'fairpoints' ? fairPoints(rank, p.score) : rank;
+        var fp = fairPoints(rank, p.score);
         if (playerData[p.name]) playerData[p.name].rounds.push({ fp, score: p.score });
       });
     }
@@ -344,7 +344,7 @@ function updateGroupStandings() {
       var scored = orderRoomByScore(withScores, ri, rm);
       scored.forEach((p, idx) => {
         var rank = idx + 1;
-        var fp = T.cfg.scoring === 'fairpoints' ? fairPoints(rank, p.score) : rank;
+        var fp = fairPoints(rank, p.score);
         if (byGroup[groupLabel] && byGroup[groupLabel][p.name]) byGroup[groupLabel][p.name].rounds.push({ fp, score: p.score });
       });
     }

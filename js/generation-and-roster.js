@@ -34,6 +34,46 @@ function toggleScheduleLogicFields() {
   document.getElementById('field-semis-final-override').style.display = scheduleLogic === 'classic-elimination' ? 'block' : 'none';
 }
 
+// Restricts "Schedule logic"'s single/double-elimination options to whichever
+// Game Format (+ Odd-count strategy) combination can actually run them —
+// mirrors the two hard throws in js/bracket-phases.js exactly
+// (singleEliminationBracketPhase/doubleEliminationBracketPhase both require
+// roomSize.ideal === 2 and refuse oddCountStrategy 'flex'), just surfaced at
+// selection time instead of failing at Generate-Schedule time. Called from
+// the end of toggleFormatFields() (covers a format change and the
+// loadState() restore path, since that already calls toggleFormatFields())
+// and directly from cfg-odd-count-strategy's own onchange (the one edge case
+// where format stays fixed — team-3v3 is the only format offering 'flex' at
+// all — but availability still changes). Preserves the current selection
+// when it's still valid rather than force-resetting on every rebuild (unlike
+// the odd-count-strategy dropdown's own rebuild above, which always defaults
+// back to 'none') — schedule-logic's value only matters on the NEXT Generate
+// Schedule click, not on an already-running tournament, so there's no
+// correctness reason to disturb an already-valid choice, e.g. loadState()
+// restoring a saved double-elimination team-3v3 setup.
+// NOTE: the reason-suffix string below is hand-synced with index.html's
+// static disabled-option defaults, not derived from GAME_FORMATS — if a
+// third idealRoomSize:2 format is ever registered, update both by hand.
+function refreshScheduleLogicAvailability() {
+  var format = GAME_FORMATS[document.getElementById('cfg-game-format').value];
+  var oddCountStrategy = document.getElementById('cfg-odd-count-strategy').value;
+  var compatible = format.idealRoomSize === 2 && oddCountStrategy !== 'flex';
+  var reasonSuffix = ' (needs a 1v1 or 3v3 format)';
+  var select = document.getElementById('cfg-schedule-logic');
+  ['single-elimination', 'double-elimination'].forEach(function (val) {
+    var opt = select.querySelector('option[value="' + val + '"]');
+    if (!opt) return;
+    var baseLabel = val === 'single-elimination' ? 'Single elimination' : 'Double elimination';
+    opt.disabled = !compatible;
+    opt.textContent = compatible ? baseLabel : baseLabel + reasonSuffix;
+  });
+  var selectedOpt = select.querySelector('option[value="' + select.value + '"]');
+  if (selectedOpt && selectedOpt.disabled) {
+    select.value = 'classic-elimination';
+    toggleScheduleLogicFields();
+  }
+}
+
 // Live-updating preview for the Group Stage pooling phase (Part 1 of
 // "Group stage" in HANDOFF.md) — recomputes on every group-size/round-
 // robin-mode/qualifiers-per-group edit, showing the group breakdown and
@@ -140,6 +180,7 @@ function toggleFormatFields() {
   } else {
     scoringWrap.style.display = 'none';
   }
+  refreshScheduleLogicAvailability();
 }
 
 // ═══════════════════════════════════════════════════════════════

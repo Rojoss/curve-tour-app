@@ -435,8 +435,8 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
         <div class="field"><label>Schedule logic</label>
           <select id="cfg-schedule-logic" onchange="toggleScheduleLogicFields()">
             <option value="classic-elimination">Classic elimination</option>
-            <option value="single-elimination">Single elimination</option>
-            <option value="double-elimination">Double elimination</option>
+            <option value="single-elimination" disabled>Single elimination (needs a 1v1 or 3v3 format)</option>
+            <option value="double-elimination" disabled>Double elimination (needs a 1v1 or 3v3 format)</option>
             <option value="kings-valley" disabled>Kings Valley (coming soon)</option>
           </select></div>
         <div class="field"><label>Game format</label>
@@ -450,14 +450,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
           </select></div>
         <div class="field" id="field-odd-count-strategy" style="display:none">
           <label>Odd-count strategy</label>
-          <select id="cfg-odd-count-strategy"></select></div>
+          <select id="cfg-odd-count-strategy" onchange="refreshScheduleLogicAvailability()"></select></div>
         <div class="field" id="field-team-scoring-rule" style="display:none">
           <label>Team scoring</label>
           <select id="cfg-team-scoring-rule"></select></div>
         <div class="field"><label>Scoring system</label>
           <select id="cfg-scoring">
-            <option value="fairpoints">Fair Points  (rank + score ÷ 100000)</option>
-            <option value="raw">Raw score only</option>
+            <option value="fairpoints">Fair Points  (rank − score ÷ 100000)</option>
           </select></div>
         <div class="field"><label>Pooling phase</label>
           <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Combines with Schedule logic above — e.g. Group Stage + Classic elimination = groups feeding into a knockout bracket.</div>

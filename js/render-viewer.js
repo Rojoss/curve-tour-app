@@ -289,7 +289,7 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
         // Group stage: label each room card with its owning group (round.
         // roomGroups[rm-1]) instead of a bare room letter, since "Room A"
         // alone doesn't say which of the K groups it belongs to.
-        var roomHeading = round.isGroupStage ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm) : 'Room ' + roomLabel(rm);
+        var roomHeading = (round.isGroupStage ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm) : 'Room ' + roomLabel(rm)) + ' (' + players.length + ')';
         html += `<div class="bracket-room-group"><div class="bracket-room-label">${roomHeading}</div>`;
 
         // pi is kept on each entry (not just used inline) because orderRoomByScore()
@@ -407,11 +407,11 @@ function buildPlaceholderRoundHtml(state, round) {
 
   var html = '';
   for (var rm = 1; rm <= rooms.length; rm++) {
-    var heading = (round.isGroupStage && round.roomGroups)
-      ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm)
-      : 'Room ' + roomLabel(rm);
-    html += `<div class="bracket-room-group"><div class="bracket-room-label">${heading}</div>`;
     var slots = rooms[rm - 1] || 0;
+    var heading = ((round.isGroupStage && round.roomGroups)
+      ? 'Group ' + esc(round.roomGroups[rm - 1]) + ' · Room ' + roomLabel(rm)
+      : 'Room ' + roomLabel(rm)) + ' (' + slots + ')';
+    html += `<div class="bracket-room-group"><div class="bracket-room-label">${heading}</div>`;
     for (var s = 0; s < slots; s++) html += `<div class="bracket-placeholder-row"><span>—</span></div>`;
     html += '</div>';
   }

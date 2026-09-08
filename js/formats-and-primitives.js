@@ -539,8 +539,15 @@ function randomSeed(players, rooms) {
 
 // ═══════════════════════════════════════════════════════════════
 // SCORING & TIE-BREAKS — Fair Points  (lower = better)
+//  rank is the dominant term; score / 100000 is a same-rank tiebreaker
+//  fraction small enough to never cross a rank boundary. SUBTRACTED (not
+//  added) so a HIGHER score correctly produces a LOWER (better, under this
+//  ascending sort) total among players sharing a rank — e.g. two 1st-place
+//  finishers on scores 1306 and 1200 land at 0.98694 and 0.988 respectively,
+//  so the higher score still sorts first. (Previously added, which had this
+//  backwards — a higher score made the tiebreak fraction WORSE.)
 // ═══════════════════════════════════════════════════════════════
-function fairPoints(rank, score) { return rank + score / 100000; }
+function fairPoints(rank, score) { return rank - score / 100000; }
 
 // Groups a room's score-sorted (descending) players into clusters sharing an
 // identical score — size 1 for a unique score, size 2+ for a tie. Shared by
