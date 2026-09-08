@@ -245,7 +245,6 @@ function applyRemoteWriterUpdate(payload) {
   }
   else if (activeTab === 'scoreboard') renderScoreboard();
   else if (activeTab === 'bracket') renderBracket();
-  else if (activeTab === 'players') renderPlayers();
   else if (activeTab === 'rankings') renderRankings();
 }
 
@@ -388,6 +387,5 @@ function renderTabForViewerSync() {
   var activeTab = getActiveTab();
   if (activeTab === 'scoreboard') renderScoreboard();
   else if (activeTab === 'bracket') renderBracket();
-  else if (activeTab === 'players') renderPlayers();
   else if (activeTab === 'rankings') renderRankings();
 }

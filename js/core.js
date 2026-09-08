@@ -215,7 +215,6 @@ function switchTab(id, btn) {
   // the convenience criterion in "Design intent for viewer-facing tabs"
   // (HANDOFF.md). Every other renderBracket() call site stays zero-arg.
   if (id === 'bracket')    renderBracket(true);
-  if (id === 'players')    renderPlayers();
   if (id === 'rankings')   renderRankings();
   if (id === 'archive')    renderArchiveList();
   saveState();

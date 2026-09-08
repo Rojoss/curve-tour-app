@@ -143,20 +143,10 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
 .game-tab{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted)}
 .game-tab.active{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan)}
 
-/* Player view */
-.player-card-v{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;flex-wrap:wrap}
-.p-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-size:15px;font-weight:700;color:var(--cyan);flex-shrink:0}
-.p-info{flex:1;min-width:120px}
-.p-name{font-weight:600;font-size:14px}
-.p-room{font-size:11px;color:var(--muted);margin-top:2px}
-.p-room strong{color:var(--cyan);font-family:var(--font-d);font-size:14px}
-.p-room .p-rnd{color:var(--muted)}
-.p-status{margin-left:auto}
-
 /* Bracket overview */
 /* "Follow a player" search bar — sits above the legend/scroller. The input
    needs an explicit max-width since the global input[type=text] rule below
-   is width:100% (same reason #pl-search carries one inline). */
+   is width:100%. */
 .bracket-follow-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 #br-follow-input{max-width:260px;flex-shrink:0}
 .bracket-follow-pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;background:var(--cyan-dim);border:1px solid var(--border);border-radius:20px;padding:4px 6px 4px 12px}
@@ -409,7 +399,6 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
   <button data-tab="admin" onclick="switchTab('admin',this)">⚙ Admin</button>
   <button data-tab="scoreboard" onclick="switchTab('scoreboard',this)">📊 Scoreboard</button>
   <button class="active" data-tab="bracket" onclick="switchTab('bracket',this)">🗂 Bracket</button>
-  <button data-tab="players" onclick="switchTab('players',this)">🎮 Players</button>
   <button data-tab="rankings" onclick="switchTab('rankings',this)">🏆 Rankings</button>
   <button data-tab="archive" onclick="switchTab('archive',this)">🗄 Archive</button>
 </nav>
@@ -582,21 +571,16 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
   </div>
 </div>
 
-<!-- ═══ PLAYERS ═══ -->
-<div class="view" id="view-players">
-  <div id="pl-empty" class="msg msg-info">No players registered yet — check back once the organiser loads a roster in Admin.</div>
-  <div id="pl-content" style="display:none">
-    <input type="text" id="pl-search" placeholder="Search your name…" oninput="filterPlayers()" style="max-width:320px;margin-bottom:14px">
-    <div id="pl-list"></div>
-  </div>
-</div>
-
 <!-- ═══ RANKINGS ═══ -->
+<!-- Players tab folded in here 2026-09-08 (see HANDOFF_LOG.md "Merge Players
+     tab into Rankings") — #rk-empty now only covers "no roster loaded at
+     all"; a loaded-but-not-yet-scheduled roster shows the flat Registered/
+     Reserve list buildRosterOnlyRows() produces instead. -->
 <div class="view" id="view-rankings">
-  <div id="rk-empty" class="msg msg-info">Start a tournament in Admin to see live rankings.</div>
+  <div id="rk-empty" class="msg msg-info">No players registered yet — check back once the organiser loads a roster in Admin.</div>
   <div id="rk-content" style="display:none">
-    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament ranking — finalists ranked by cumulative Final score, everyone else by the round they were eliminated in, then relative score within that round. Updates as rounds are completed.</p>
-    <div class="btn-row" style="margin-top:0;margin-bottom:14px">
+    <p id="rk-desc" style="color:var(--muted);font-size:12px;margin-bottom:14px">Full tournament ranking — finalists ranked by cumulative Final score, everyone else by the round they were eliminated in, then relative score within that round. Updates as rounds are completed.</p>
+    <div id="rk-download-row" class="btn-row" style="margin-top:0;margin-bottom:14px">
       <button class="btn btn-purple" onclick="downloadRankingsImage()">⬇ Download rankings image</button>
     </div>
     <div class="card">

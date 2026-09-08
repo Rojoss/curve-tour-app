@@ -605,8 +605,8 @@ function clearFollow() {
 // built), and keeping buildBracketHtml a pure function of its inputs is what
 // lets Archive keep calling buildBracketHtml(snap) with no follow argument
 // at all and never show any highlighting. "Eliminated" uses the exact same
-// rule renderPlayers()/computeRankings() already use (lastAssignedRound) so
-// it means one consistent thing everywhere in the app.
+// rule computeRankings() already uses (lastAssignedRound) so it means one
+// consistent thing everywhere in the app.
 function bracketFollowStatus(state, key) {
   if (!key) return null;
   var rounds = {};
@@ -821,128 +821,11 @@ function bracketFinalScoreChanged(input) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PLAYERS & RANKINGS — Players View (live only)
+// RANKINGS — live + archive-shared pure builders. The Players tab was
+// retired 2026-09-08 and folded in here (current round/room + live pooling
+// rank for a still-active unit, plus the pre-schedule roster list) — see
+// "Merge Players tab into Rankings" in HANDOFF_LOG.md for the full account.
 // ═══════════════════════════════════════════════════════════════
-function renderPlayers() {
-  if (!T.players.length && !T.reserves.length) return;
-  document.getElementById('pl-empty').style.display = 'none';
-  document.getElementById('pl-content').style.display = 'block';
-
-  // Roster loaded but no schedule generated yet — show a plain registration list.
-  if (!T.rounds.length) {
-    var html0 = '';
-    var byLabel = (a, b) => unitDisplay(T, a).label.localeCompare(unitDisplay(T, b).label);
-    rosterKeys(T.players).slice().sort(byLabel).forEach(key => {
-      html0 += playerCard(key, '<span class="pill pill-neut">Registered — not started yet</span>');
-    });
-    rosterKeys(T.reserves).slice().sort(byLabel).forEach(key => {
-      html0 += playerCard(key, '<span class="pill pill-neut">Reserve</span>');
-    });
-    document.getElementById('pl-list').innerHTML = html0;
-    return;
-  }
-
-  // Find each roster unit's current round/room — mirrors computeRankings()'s
-  // exact elimination rule (present in round ri's assignment but absent from
-  // ri+1's, where ri+1 actually exists) instead of the score-completeness
-  // proxy this used to use, which showed a unit as "Eliminated" the moment
-  // their room was fully scored, even before the organiser clicked Next
-  // Round. Find each unit's LATEST assignment round (later rounds always
-  // supersede earlier ones here, so a plain overwrite is correct — no
-  // "were they in the next round" check needed per iteration); a unit whose
-  // latest appearance IS the last round that currently has any assignment
-  // at all is still active/in progress, regardless of score completeness —
-  // anyone whose latest appearance is an *earlier* round is eliminated
-  // (a later round's assignment exists and doesn't include them).
-  var lastRi = lastAssignedRound(T);
-  var latestAppearance = {};
-  for (var ri = 0; ri <= lastRi; ri++) {
-    var asgn = T.assignments[ri] || [];
-    var round = T.rounds[ri];
-    asgn.forEach(p => {
-      latestAppearance[p.name] = { round, ri, room: p.room, isLucky: p.isLucky || false };
-    });
-  }
-  var playerStatus = {};
-  rosterKeys(T.players).forEach(key => { playerStatus[key] = null; });
-  Object.keys(latestAppearance).forEach(key => {
-    if (latestAppearance[key].ri === lastRi) playerStatus[key] = latestAppearance[key];
-  });
-
-  var fpMap = {};
-  if (T.cfg.poolingPhase === 'group-stage') {
-    // No single global ranking exists for group stage — each unit's rank
-    // is local to its own group's table, not comparable to another
-    // group's rank 1 the way a flat qual/Swiss table's rank is.
-    Object.keys(T.groupStandings).forEach(label => {
-      (T.groupStandings[label] || []).forEach((p, i) => { fpMap[p.name] = { rank: i + 1, fp: p.totalFP, groupLabel: label }; });
-    });
-  } else if (T.cfg.poolingPhase !== 'none') {
-    T.qualTable.forEach((p, i) => { fpMap[p.name] = { rank: i+1, fp: p.totalFP }; });
-  }
-
-  var allPlayers = [...new Set([...rosterKeys(T.players), ...Object.keys(playerStatus).filter(n => playerStatus[n])])];
-  var sorted = allPlayers.slice().sort((a, b) => unitDisplay(T, a).label.localeCompare(unitDisplay(T, b).label));
-
-  var html = '';
-  sorted.forEach(key => {
-    var status = playerStatus[key];
-    var fp = fpMap[key];
-
-    var statusHtml = '';
-    if (!status) {
-      statusHtml = '<span class="pill pill-elim">Eliminated</span>';
-    } else {
-      var rn = status.round.roundNum;
-      var roundName = status.round.isFinal ? 'Final' : status.round.isSemis ? 'Semis' : 'Round '+rn;
-      // status.isLucky data stays (harmless) but is no longer rendered here —
-      // the ★ Lucky Loser marker belongs on Bracket's round-of-origin card
-      // now, not on the Players tab's "current status" view. A bye entry
-      // (room:null, "Bye" odd-count strategy) has no room to show — same
-      // "advancing automatically, no room this round" wording as Scoreboard/
-      // Admin's own bye cards, rather than a broken roomLabel(null).
-      var whereHtml = status.room === null
-        ? '<strong style="color:var(--amber)">BYE</strong> — advances automatically'
-        : `Room <strong>${roomLabel(status.room)}</strong>`;
-      statusHtml = `<div class="p-room"><span class="p-rnd">${roundName}</span> — ${whereHtml}</div>`;
-    }
-
-    var fpRankLabel = fp && fp.groupLabel ? 'Grp ' + fp.groupLabel + ' #' + fp.rank : fp ? '#' + fp.rank : '';
-    var fpHtml = fp ? `<span class="p-pts" style="font-size:11px;color:var(--amber)">${fpRankLabel}${fp.fp!==null?' · '+fp.fp.toFixed(3)+' FP':''}</span>` : '';
-
-    html += playerCard(key, statusHtml, fpHtml, !status);
-  });
-  document.getElementById('pl-list').innerHTML = html;
-}
-
-function filterPlayers() {
-  var q = document.getElementById('pl-search').value.toLowerCase();
-  document.querySelectorAll('.player-card-v').forEach(c => {
-    c.style.display = c.querySelector('.p-name').textContent.toLowerCase().includes(q) ? '' : 'none';
-  });
-}
-
-// key is a roster identity (a player name, or a team's teamId) — resolved to
-// a display label (+ member names, for team formats) via unitDisplay().
-// Avatar initials come from the resolved label, not the raw key, so a team
-// format shows initials from the team name rather than an opaque teamId.
-function playerCard(key, statusHtml, fpHtml, isOut) {
-  var info = unitDisplay(T, key);
-  var init = info.label.split(/[\s_\-]+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
-  var nameHtml = info.members
-    ? `<div class="p-name">${esc(info.label)}</div><div style="font-size:11px;color:var(--muted)">${info.members.map(esc).join(' & ')}</div>`
-    : `<div class="p-name">${esc(info.label)}</div>`;
-  return `<div class="player-card-v">
-    <div class="p-avatar">${init}</div>
-    <div class="p-info">
-      ${nameHtml}
-      ${statusHtml}
-    </div>
-    ${fpHtml || ''}
-    <div class="p-status">${isOut ? '<span class="pill pill-elim">Out</span>' : ''}</div>
-  </div>`;
-}
-
 function roundShortLabel(round) {
   return round.isFinal ? '🏆 Final' : round.isSemis ? '⚔ Semis' :
          round.isQual  ? 'Qual R' + round.roundNum :
@@ -965,13 +848,37 @@ function rankingUnitCell(entry) {
 // Block-level "row" (not a <tr> — see the .rk-columns CSS comment) so rows
 // can flow into a CSS column-width container. rankHtml/badgeHtml are
 // pre-built fragments since what goes in each varies by section (a
-// still-active unit has no rank; a finalist/eliminated unit does).
-function rankingRowHtml(rankHtml, entry, badgeHtml, extraCls) {
+// still-active unit has no rank; a finalist/eliminated unit does). subHtml
+// (2026-09-08, Players-tab fold-in) is an optional extra line rendered right
+// after the unit cell — used for a still-active unit's current round/room;
+// omitted (undefined -> '') by every other call site, so their output is
+// byte-identical to before this parameter existed.
+function rankingRowHtml(rankHtml, entry, badgeHtml, extraCls, subHtml) {
   return `<div class="rk-row${extraCls ? ' ' + extraCls : ''}">
     <span class="rk-rank">${rankHtml}</span>
-    <span class="rk-unit">${rankingUnitCell(entry)}</span>
+    <span class="rk-unit">${rankingUnitCell(entry)}${subHtml || ''}</span>
     ${badgeHtml}
   </div>`;
+}
+
+// The two pieces of per-unit info the retired Players tab used to be the
+// only viewer-facing surface for (2026-09-08, "Merge Players tab into
+// Rankings" in HANDOFF_LOG.md) — a still-active unit's current round/room,
+// and its live pooling-phase rank. Kept as small standalone builders (not
+// folded into rankingRowHtml itself) so the "what extra info does a
+// still-active row carry" concern stays localized to buildRankingsRows below.
+function rankingStillActiveSubHtml(u, lastRound) {
+  var whereHtml = u.room === null
+    ? '<strong style="color:var(--amber)">BYE</strong> — advances automatically'
+    : 'Room <strong style="color:var(--cyan)">' + roomLabel(u.room) + '</strong>';
+  return '<div style="font-size:11px;color:var(--muted);margin-top:2px">' +
+    esc(roundShortLabel(lastRound)) + ' — ' + whereHtml + '</div>';
+}
+function rankingPoolRankBadge(u) {
+  if (!u.poolRank) return '';
+  var label = (u.poolRank.groupLabel ? 'Grp ' + u.poolRank.groupLabel + ' #' + u.poolRank.rank : '#' + u.poolRank.rank) +
+    (u.poolRank.fp !== null ? ' · ' + u.poolRank.fp.toFixed(3) + ' FP' : '');
+  return '<div style="font-size:10px;color:var(--amber);margin-top:3px;text-align:right">' + label + '</div>';
 }
 
 // Still-active and ranked (finalists + eliminated) are two INDEPENDENT
@@ -979,9 +886,11 @@ function rankingRowHtml(rankHtml, entry, badgeHtml, extraCls) {
 // between them could land at the bottom of one column while its own
 // section's rows start in the next, which reads as broken.
 function buildRankingsRows(data) {
-  var activeHtml = data.stillActive.map(u =>
-    rankingRowHtml('—', u, '<span class="pill pill-neut">Still in tournament</span>', 'rk-active')
-  ).join('');
+  var activeHtml = data.stillActive.map(u => {
+    var badgeHtml = '<div style="display:flex;flex-direction:column;align-items:flex-end">' +
+      '<span class="pill pill-neut">Still in tournament</span>' + rankingPoolRankBadge(u) + '</div>';
+    return rankingRowHtml('—', u, badgeHtml, 'rk-active', rankingStillActiveSubHtml(u, data.lastRound));
+  }).join('');
 
   var rankedRows = [];
   if (data.finalComplete) {
@@ -1006,13 +915,58 @@ function buildRankingsRows(data) {
   return out || '<div style="text-align:center;color:var(--muted);padding:20px">No data yet.</div>';
 }
 
-// Live-only wrapper around the two shared builders above.
+// Pre-schedule roster view (2026-09-08, Players-tab fold-in) — a roster can
+// be loaded in Admin well before Generate Schedule is clicked; computeRankings()
+// itself returns null until a schedule exists (state.rounds.length === 0), so
+// this is a small separate pure builder rather than a third computeRankings()
+// branch, keeping that function's own null-return contract (relied on by
+// Archive/PNG-export, which never need a "no schedule yet" state) unchanged.
+// Reuses rosterKeys()/unitDisplay()/rankingRowHtml()/rankingUnitCell() —
+// deliberately NOT the retired Players tab's playerCard() avatar-card shape,
+// rendered instead through Rankings' own .rk-row/.rk-columns idiom.
+function buildRosterOnlyRows(state) {
+  var byLabel = (a, b) => unitDisplay(state, a).label.localeCompare(unitDisplay(state, b).label);
+  var rows = '';
+  rosterKeys(state.players).slice().sort(byLabel).forEach(key => {
+    var info = unitDisplay(state, key);
+    rows += rankingRowHtml('—', { name: key, label: info.label, members: info.members },
+      '<span class="pill pill-neut">Registered</span>', '');
+  });
+  rosterKeys(state.reserves).slice().sort(byLabel).forEach(key => {
+    var info = unitDisplay(state, key);
+    rows += rankingRowHtml('—', { name: key, label: info.label, members: info.members },
+      '<span class="pill pill-neut">Reserve</span>', '');
+  });
+  return rows ? '<div class="rk-columns">' + rows + '</div>' : '';
+}
+
+// Live-only wrapper around the shared builders above.
 function renderRankings() {
   var data = computeRankings();
   var empty = document.getElementById('rk-empty'), content = document.getElementById('rk-content');
-  if (!data) { empty.style.display = 'block'; content.style.display = 'none'; return; }
+  var desc = document.getElementById('rk-desc'), dlRow = document.getElementById('rk-download-row');
+  if (!data) {
+    // A roster can be loaded (Registered/Reserve names exist) before any
+    // schedule is generated — show that flat list instead of the "start a
+    // tournament" placeholder, which is now reserved for the genuinely
+    // empty case (no roster loaded at all).
+    if (T.players.length || T.reserves.length) {
+      empty.style.display = 'none';
+      content.style.display = 'block';
+      if (desc) desc.style.display = 'none';
+      if (dlRow) dlRow.style.display = 'none';
+      document.getElementById('rk-list').innerHTML = buildRosterOnlyRows(T) ||
+        '<div style="text-align:center;color:var(--muted);padding:20px">No data yet.</div>';
+    } else {
+      empty.style.display = 'block';
+      content.style.display = 'none';
+    }
+    return;
+  }
   empty.style.display = 'none';
   content.style.display = 'block';
+  if (desc) desc.style.display = '';
+  if (dlRow) dlRow.style.display = '';
   document.getElementById('rk-list').innerHTML = buildRankingsRows(data);
 }
 

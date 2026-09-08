@@ -1206,9 +1206,11 @@ function finalsProgressState(state, ri, round) {
 //  qualification-table cut uniformly, without re-deriving each
 //  round's advancement logic separately.
 // ═══════════════════════════════════════════════════════════════
-// Index of the last round that currently has any assignment at all — shared
-// by computeRankings() and renderPlayers() so "what counts as still active
-// vs. eliminated" is defined exactly once. A unit's *latest* appearance
+// Index of the last round that currently has any assignment at all — the
+// single shared definition of "what counts as still active vs. eliminated"
+// (computeRankings() is now its only caller — the Players tab, which used
+// to call this directly too, was retired 2026-09-08 and folded into
+// Rankings). A unit's *latest* appearance
 // being in this round means they're still in progress, regardless of
 // whether their room happens to be fully scored yet; only a unit whose
 // latest appearance is in an *earlier* round, with this round's assignment
@@ -1308,7 +1310,7 @@ function computeRankings(state) {
       // so sorting by total would rank the wrong side first.
       finalists = [{ name: race.winnerName, total: winnerWins }, { name: loserName, total: loserWins }];
     } else {
-      lastAsgn.forEach(p => stillActive.push(p.name));
+      lastAsgn.forEach(p => stillActive.push(p));
     }
   } else if (lastRound.isFinal) {
     var ng = lastRound.numGames;
@@ -1323,13 +1325,18 @@ function computeRankings(state) {
         return { name: p.name, total };
       }).sort((a, b) => b.total - a.total);
     } else {
-      lastAsgn.forEach(p => stillActive.push(p.name));
+      lastAsgn.forEach(p => stillActive.push(p));
     }
   } else {
-    lastAsgn.forEach(p => stillActive.push(p.name));
+    lastAsgn.forEach(p => stillActive.push(p));
   }
 
-  var stillActiveSet = new Set(stillActive);
+  // stillActive now holds the raw assignment entries (name/room/isLucky),
+  // not bare names — see stillActiveOut below, which attaches them to the
+  // returned entries so a viewer tab can show "which room am I in right
+  // now" (folded in from the retired Players tab, 2026-09-08). The set used
+  // for elimination-exclusion below must stay name-keyed regardless.
+  var stillActiveSet = new Set(stillActive.map(p => p.name));
   var finalistSet = new Set(finalists.map(f => f.name));
 
   // Ranks by roster identity key — a team's teamId for team formats, a
@@ -1364,6 +1371,26 @@ function computeRankings(state) {
     });
   }
 
+  // Live pooling-phase rank (Qual Table / Swiss's flat table, or Group
+  // Stage's per-group table) for each still-active unit — folded in from
+  // the retired Players tab (2026-09-08, see "Merge Players tab into
+  // Rankings" in HANDOFF_LOG.md). Generalized from state.T-only to
+  // state.cfg/.qualTable/.groupStandings, with defensive guards Players
+  // itself never needed (it only ever ran against live T) — computeRankings()
+  // is also called against arbitrary Archive snapshots, including ones
+  // saved before these fields existed at all (same "may be missing"
+  // precedent already established at js/archive.js's own snapshot handling).
+  var poolRankMap = {};
+  if (state.cfg && state.cfg.poolingPhase === 'group-stage') {
+    Object.keys(state.groupStandings || {}).forEach(label => {
+      (state.groupStandings[label] || []).forEach((p, i) => {
+        poolRankMap[p.name] = { rank: i + 1, fp: p.totalFP, groupLabel: label };
+      });
+    });
+  } else if (state.cfg && state.cfg.poolingPhase && state.cfg.poolingPhase !== 'none') {
+    (state.qualTable || []).forEach((p, i) => { poolRankMap[p.name] = { rank: i + 1, fp: p.totalFP }; });
+  }
+
   // Attach display label/members (resolved fresh from state.players, so a
   // renamed team shows its current name/roster) — done here, once, so
   // downstream pure consumers (buildRankingsRows, the rankings image
@@ -1373,9 +1400,20 @@ function computeRankings(state) {
     entry.label = info.label; entry.members = info.members;
     return entry;
   }
-  var stillActiveOut = stillActive.map(name => withLabel({ name })).sort((a, b) => a.label.localeCompare(b.label));
+  // room/isLucky/poolRank are new (2026-09-08, Players-tab fold-in) — a
+  // still-active unit's current room ("Room B", or null for a bye) and live
+  // pooling rank, the two pieces of information the Players tab used to be
+  // the only viewer-facing surface for. finalists/eliminatedList entries
+  // never get these three fields (undefined on those), same as before.
+  var stillActiveOut = stillActive.map(p => withLabel({
+    name: p.name, room: p.room, isLucky: p.isLucky || false, poolRank: poolRankMap[p.name] || null
+  })).sort((a, b) => a.label.localeCompare(b.label));
   finalists.forEach(withLabel);
   eliminatedList.forEach(withLabel);
 
-  return { stillActive: stillActiveOut, finalComplete, finalists, eliminatedList };
+  // lastRound/lastRi exposed once, at the top level, rather than per
+  // stillActive entry — every still-active unit is, by construction, from
+  // this exact same round (lastAsgn = state.assignments[lastRi]), so a
+  // single shared reference is correct and avoids a redundant per-entry copy.
+  return { stillActive: stillActiveOut, finalComplete, finalists, eliminatedList, lastRound, lastRi };
 }
