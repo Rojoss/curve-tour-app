@@ -431,14 +431,6 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
     <div class="g2" style="margin-bottom:16px">
       <div class="card">
         <div class="card-title">Tournament Settings</div>
-        <div class="field"><label>Registered players</label><div class="field-display" id="cfg-n-display">—</div></div>
-        <div class="field"><label>Schedule logic</label>
-          <select id="cfg-schedule-logic" onchange="toggleScheduleLogicFields()">
-            <option value="classic-elimination">Classic elimination</option>
-            <option value="single-elimination" disabled>Single elimination (needs a 1v1 or 3v3 format)</option>
-            <option value="double-elimination" disabled>Double elimination (needs a 1v1 or 3v3 format)</option>
-            <option value="kings-valley" disabled>Kings Valley (coming soon)</option>
-          </select></div>
         <div class="field"><label>Game format</label>
           <select id="cfg-game-format" onchange="toggleFormatFields()">
             <option value="ffa-individual">FFA — Individual</option>
@@ -448,18 +440,18 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
             <option value="last-man-standing" disabled>Last Man Standing (coming soon)</option>
             <option value="individual-1v1">1v1</option>
           </select></div>
-        <div class="field" id="field-odd-count-strategy" style="display:none">
-          <label>Odd-count strategy</label>
-          <select id="cfg-odd-count-strategy" onchange="refreshScheduleLogicAvailability()"></select></div>
+        <div class="field"><label>Schedule logic</label>
+          <select id="cfg-schedule-logic" onchange="toggleScheduleLogicFields()">
+            <option value="single-elimination">Single elimination</option>
+            <option value="double-elimination" hidden disabled>Double elimination</option>
+            <option value="double-elimination-shared-final">Double elimination — FFA/Team</option>
+            <option value="kings-valley" disabled>Kings Valley (coming soon)</option>
+          </select></div>
         <div class="field" id="field-team-scoring-rule" style="display:none">
           <label>Team scoring</label>
           <select id="cfg-team-scoring-rule"></select></div>
-        <div class="field"><label>Scoring system</label>
-          <select id="cfg-scoring">
-            <option value="fairpoints">Fair Points  (rank − score ÷ 100000)</option>
-          </select></div>
         <div class="field"><label>Pooling phase</label>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Combines with Schedule logic above — e.g. Group Stage + Classic elimination = groups feeding into a knockout bracket.</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Combines with Schedule logic above — e.g. Group Stage + Single elimination = groups feeding into a knockout bracket.</div>
           <select id="cfg-pooling-phase" onchange="togglePoolingPhaseField()">
             <option value="none">None — standard elimination from R1</option>
             <option value="qual-table">Qualification Table — R1/R2/R3 feed cumulative table</option>
@@ -482,6 +474,13 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
         <div class="field" id="field-qualifiers-per-group" style="display:none">
           <label>Qualifiers per group</label>
           <input type="number" id="cfg-qualifiers-per-group" value="2" min="1" oninput="updateGroupStagePreview()"></div>
+        <div class="field" id="field-odd-count-strategy" style="display:none">
+          <label>Odd-count strategy</label>
+          <select id="cfg-odd-count-strategy" onchange="refreshScheduleLogicAvailability()"></select></div>
+        <div class="field"><label>Scoring system</label>
+          <select id="cfg-scoring">
+            <option value="fairpoints">Fair Points  (rank − score ÷ 100000)</option>
+          </select></div>
         <div class="field" id="field-finals-games"><label>Finals format</label>
           <select id="cfg-finals-games">
             <option value="1">Single game</option>
@@ -497,15 +496,18 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
             <div style="flex:1"><span style="font-size:11px;color:var(--muted)">Losers' bracket finalist</span>
               <input type="number" id="cfg-grand-final-lb-target" value="3" min="1"></div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Games are played one at a time until either side reaches its target. Set both equal for no structural advantage.</div></div>
-        <div class="field" id="field-semis-final-override" style="display:none">
-          <label>Semis / Final size override (optional)</label>
-          <div style="display:flex;gap:10px">
-            <div style="flex:1"><span style="font-size:11px;color:var(--muted)">Semis</span>
-              <input type="number" id="cfg-semis-override" placeholder="derived" min="1"></div>
-            <div style="flex:1"><span style="font-size:11px;color:var(--muted)">Final</span>
-              <input type="number" id="cfg-final-override" placeholder="derived" min="1"></div>
-          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Games are played one at a time until either side reaches its target. Set both equal for no structural advantage. Each game's team score follows the "Team scoring" rule above, applied per game — not summed across the whole match.</div></div>
+        <div class="field" id="field-semis-override" style="display:none">
+          <label>Semis size override (optional)</label>
+          <input type="number" id="cfg-semis-override" placeholder="derived" min="1">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Leave blank to use the derived default. A headcount only — room shape/count is still figured out automatically within the format's normal range.</div></div>
+        <div class="field" id="field-lb-qualifiers" style="display:none">
+          <label>LB qualifiers into the Final</label>
+          <input type="number" id="cfg-lb-qualifiers" value="2" min="1">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">How many losers'-bracket survivors join the Final. The rest of the Final (see size below) comes from the winners' bracket.</div></div>
+        <div class="field" id="field-final-override" style="display:none">
+          <label>Final size override (optional)</label>
+          <input type="number" id="cfg-final-override" placeholder="derived" min="1">
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Leave blank to use the derived default. A headcount only — room shape/count is still figured out automatically within the format's normal range.</div></div>
         <div id="generate-error" class="msg msg-err" style="display:none"></div>
         <div class="btn-row">
@@ -513,6 +515,7 @@ tr.tie-row td:first-child{border-left:2px solid var(--red)}
         </div>
       </div>
       <div class="card">
+        <div class="field"><label>Registered players</label><div class="field-display" id="cfg-n-display">—</div></div>
         <div class="card-title" id="roster-title">Roster  <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px" id="roster-title-hint">— confirmed players, one per line</span></div>
         <div class="field" style="margin-bottom:8px"><textarea id="cfg-roster" placeholder="Harald&#10;Lagtop&#10;Arisu&#10;..."></textarea></div>
         <div class="card-title" style="margin-top:12px" id="reserves-title">Reserves  <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px" id="reserves-title-hint">— one per line</span></div>

@@ -209,15 +209,25 @@ function buildBracketHtml(state, collapseMap, follow, editable) {
     // matching Admin's own "only the round being played" boundary.
     var rowsEditable = !!editable && isCurrent;
     var isPast    = ri < state.curRound;
-    // Lucky-loser record for round ri's OWN card: T.luckyLosers[ri+1] is
-    // written by advanceRound() for the round arrived INTO — i.e. it's the
-    // record of who was saved advancing OUT OF round ri, which is exactly
-    // the round whose card should show it (the decision happened because of
-    // ri's own results, not ri+1's — by the next round it's irrelevant that
-    // someone got there as a lucky loser). Round ri+1's card intentionally
-    // never looks at luckyLosers at all; a unit who arrived as a lucky
-    // loser is shown there exactly like any other participant.
-    var lls = state.luckyLosers[ri + 1] || [];
+    // Lucky-loser record for round ri's OWN card: T.luckyLosers[X] is
+    // written by whichever round's advancement fed unit(s) INTO round X —
+    // i.e. it's the record of who was saved advancing OUT OF round ri, which
+    // is exactly the round whose card should show it (the decision happened
+    // because of ri's own results, not X's — by the next round it's
+    // irrelevant that someone got there as a lucky loser). Round X's card
+    // intentionally never looks at luckyLosers at all; a unit who arrived as
+    // a lucky loser is shown there exactly like any other participant.
+    // X is ri+1 for every non-bracket round (advanceRound()'s generic path
+    // always advances strictly sequentially) — but for a WB/LB round, X is
+    // round.winnersTo specifically, NOT necessarily ri+1: an interposed
+    // round from the other bracket can sit between a WB/LB round and its own
+    // winnersTo target in T.rounds' array order (see the topology comment
+    // above doubleEliminationBracketPhase in js/bracket-phases.js). Found and
+    // fixed 2026-09-08 during Stage B4's rendering-verification pass — the
+    // bare ri+1 lookup silently missed every WB/LB lucky-loser winner
+    // whenever their own winnersTo wasn't literally the next array slot.
+    var luckyLookupIdx = (round.winnersTo !== null && round.winnersTo !== undefined) ? round.winnersTo : ri + 1;
+    var lls = state.luckyLosers[luckyLookupIdx] || [];
 
     // Tie-break badge (new — first time this appears in Bracket): every
     // participant belonging to a cluster this round has an entry for in

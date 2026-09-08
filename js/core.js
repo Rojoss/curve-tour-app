@@ -30,7 +30,7 @@ var T = {
   needsSave: false,   // real changes since last archive save (or since generation, if never saved)
   autoSaved: false,   // has the Final-completion auto-save already fired for this tournament?
   cfg: {},
-  scheduleLogic: 'classic-elimination', // key into SCHEDULE_LOGICS — how rounds are structured & players progress
+  scheduleLogic: 'single-elimination', // key into SCHEDULE_LOGICS — how rounds are structured & players progress
   gameFormat: 'ffa-individual',         // key into GAME_FORMATS — what's played in each room
   gamemodeConfig: {}  // per-tournament mode parameters (room-size bounds, qual-round count, ...) — set by proceedGenerateSchedule() from the chosen format's defaults
 };
@@ -357,7 +357,7 @@ function renderAdminSecurityPanel() {
 // validateRoomCap() below are that guard, going forward.
 var HARD_ROOM_PLAYER_CAP = 10;
 
-// Default number of pooled qualification rounds for classic-elimination —
+// Default number of pooled qualification rounds for single-elimination —
 // used to populate T.gamemodeConfig.qualRounds at generation time (see
 // proceedGenerateSchedule()). Runtime code reads the per-tournament
 // descriptor value, not this constant directly, so a saved tournament keeps

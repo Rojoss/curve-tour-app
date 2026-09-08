@@ -24,52 +24,81 @@ function togglePoolingPhaseField() {
 function toggleScheduleLogicFields() {
   var scheduleLogic = document.getElementById('cfg-schedule-logic').value;
   var isDoubleElim = scheduleLogic === 'double-elimination';
+  var isSharedFinal = scheduleLogic === 'double-elimination-shared-final';
+  var isSingleElim = scheduleLogic === 'single-elimination';
+  // Grand-Final race fields only apply to 'double-elimination' (1v1/3v3's
+  // continuous-race Grand Final) — the shared-final generalization merges
+  // WB+LB survivors directly into an ordinary fixed-numGames Final, so it
+  // uses "Finals format" (like single-elimination) instead, not a race.
   document.getElementById('field-grand-final-targets').style.display = isDoubleElim ? 'block' : 'none';
   document.getElementById('field-finals-games').style.display = isDoubleElim ? 'none' : 'block';
-  // Semis/Final headcount override — only classicEliminationBracketPhase
-  // actually reads gamemodeConfig.semisSize/.finalSize (see js/bracket-
-  // phases.js); single/double-elimination have no "Semis" round concept at
-  // all, so the fields would do nothing there and are hidden to avoid
-  // implying otherwise.
-  document.getElementById('field-semis-final-override').style.display = scheduleLogic === 'classic-elimination' ? 'block' : 'none';
+  // Semis headcount override — only singleEliminationBracketPhase actually
+  // reads gamemodeConfig.semisSize (see js/bracket-phases.js); neither
+  // double-elimination variant has a "Semis" round concept at all, so the
+  // field would do nothing there and is hidden to avoid implying otherwise.
+  document.getElementById('field-semis-override').style.display = isSingleElim ? 'block' : 'none';
+  // Final headcount override — meaningful for single-elimination AND the
+  // shared-final generalization (both read gamemodeConfig.finalSize); NOT
+  // for 'double-elimination', whose Grand Final is sized by the race targets
+  // above instead.
+  document.getElementById('field-final-override').style.display = (isSingleElim || isSharedFinal) ? 'block' : 'none';
+  // LB qualifiers — only meaningful for the shared-final generalization.
+  document.getElementById('field-lb-qualifiers').style.display = isSharedFinal ? 'block' : 'none';
 }
 
-// Restricts "Schedule logic"'s single/double-elimination options to whichever
-// Game Format (+ Odd-count strategy) combination can actually run them —
-// mirrors the two hard throws in js/bracket-phases.js exactly
-// (singleEliminationBracketPhase/doubleEliminationBracketPhase both require
-// roomSize.ideal === 2 and refuse oddCountStrategy 'flex'), just surfaced at
-// selection time instead of failing at Generate-Schedule time. Called from
-// the end of toggleFormatFields() (covers a format change and the
+// Keeps exactly ONE "Double elimination" option visible in the Schedule
+// Logic dropdown at a time, matching whichever Game Format (+ Odd-count
+// strategy) combination is currently selected — surfacing the compatibility
+// rule as decluttering (an irrelevant option isn't just disabled, it's
+// hidden from the list entirely) rather than making the organiser read past
+// a greyed-out entry that will never apply to what they've already chosen
+// (2026-09-08, in response to organiser feedback that seeing both variants
+// simultaneously read as confusing clutter).
+// 'double-elimination' (the original race-format Grand Final) is compatible
+// only when format.idealRoomSize === 2 and oddCountStrategy !== 'flex' —
+// mirrors the two hard throws in doubleEliminationBracketPhase
+// (js/bracket-phases.js) exactly, just surfaced at selection time instead of
+// failing at Generate-Schedule time. 'double-elimination-shared-final' (the
+// FFA/Team generalization) is structurally compatible with EVERY format,
+// including 1v1/3v3 — but is deliberately hidden there anyway, since 1v1/3v3
+// keep the original race-format Grand Final as their intended double-
+// elimination experience (see "Explicitly out of scope" in the plan this
+// build shipped from — exposing the shared-final variant as a second
+// opt-in option for those two formats was left as a low-priority follow-up,
+// not built here). The two options are therefore always exact mirror images
+// of each other's visibility — never both shown, never both hidden.
+// Single elimination is NEVER gated here (2026-09-08 rename — it's the old
+// "Classic elimination" mechanism, format-agnostic by construction). Called
+// from the end of toggleFormatFields() (covers a format change and the
 // loadState() restore path, since that already calls toggleFormatFields())
-// and directly from cfg-odd-count-strategy's own onchange (the one edge case
-// where format stays fixed — team-3v3 is the only format offering 'flex' at
-// all — but availability still changes). Preserves the current selection
-// when it's still valid rather than force-resetting on every rebuild (unlike
-// the odd-count-strategy dropdown's own rebuild above, which always defaults
-// back to 'none') — schedule-logic's value only matters on the NEXT Generate
-// Schedule click, not on an already-running tournament, so there's no
-// correctness reason to disturb an already-valid choice, e.g. loadState()
-// restoring a saved double-elimination team-3v3 setup.
-// NOTE: the reason-suffix string below is hand-synced with index.html's
-// static disabled-option defaults, not derived from GAME_FORMATS — if a
-// third idealRoomSize:2 format is ever registered, update both by hand.
+// and directly from cfg-odd-count-strategy's own onchange (the one edge
+// case where format stays fixed — team-3v3 is the only format offering
+// 'flex' at all — but availability still changes). Preserves the current
+// selection when it's still valid rather than force-resetting on every
+// rebuild (unlike the odd-count-strategy dropdown's own rebuild above,
+// which always defaults back to 'none') — schedule-logic's value only
+// matters on the NEXT Generate Schedule click, not on an already-running
+// tournament, so there's no correctness reason to disturb an already-valid
+// choice, e.g. loadState() restoring a saved double-elimination team-3v3
+// setup.
+// NOTE: index.html's static default bakes in the SAME compatibility rule for
+// the default Game Format (FFA — Individual, incompatible) — a genuinely
+// fresh page load never calls this function at all (loadState() returns
+// immediately when there's no saved localStorage state), so first paint
+// depends entirely on that static default, not on this function ever
+// running. Keep the two in sync by hand if the default format ever changes.
 function refreshScheduleLogicAvailability() {
   var format = GAME_FORMATS[document.getElementById('cfg-game-format').value];
   var oddCountStrategy = document.getElementById('cfg-odd-count-strategy').value;
   var compatible = format.idealRoomSize === 2 && oddCountStrategy !== 'flex';
-  var reasonSuffix = ' (needs a 1v1 or 3v3 format)';
   var select = document.getElementById('cfg-schedule-logic');
-  ['single-elimination', 'double-elimination'].forEach(function (val) {
-    var opt = select.querySelector('option[value="' + val + '"]');
-    if (!opt) return;
-    var baseLabel = val === 'single-elimination' ? 'Single elimination' : 'Double elimination';
-    opt.disabled = !compatible;
-    opt.textContent = compatible ? baseLabel : baseLabel + reasonSuffix;
-  });
+  var classicOpt = select.querySelector('option[value="double-elimination"]');
+  var sharedOpt = select.querySelector('option[value="double-elimination-shared-final"]');
+  if (classicOpt) { classicOpt.hidden = !compatible; classicOpt.disabled = !compatible; }
+  if (sharedOpt) { sharedOpt.hidden = compatible; sharedOpt.disabled = compatible; }
   var selectedOpt = select.querySelector('option[value="' + select.value + '"]');
-  if (selectedOpt && selectedOpt.disabled) {
-    select.value = 'classic-elimination';
+  if (selectedOpt && (selectedOpt.disabled || selectedOpt.hidden)) {
+    select.value = 'single-elimination';
     toggleScheduleLogicFields();
   }
 }
@@ -344,20 +373,18 @@ function proceedGenerateSchedule() {
   // deriveRoomSize()'s roomSize.ideal is always exactly idealRoomSize
   // regardless of which of None/Bye/Flex ends up chosen.
   //
-  // The minimum itself now comes from the *active bracket phase*
-  // (BRACKET_PHASE_MIN_UNITS — see "True single-elimination bracket phase"
-  // in HANDOFF.md) rather than always assuming classic-elimination's
-  // semisSize (2 * ideal) universally applies — semisSize genuinely means
-  // nothing for single-elimination. classic-elimination's own entry
-  // reproduces the exact same 2*ideal formula, so this is a byte-identical
-  // floor (and message) for every format that was already registered.
+  // The minimum itself comes from the *active bracket phase*
+  // (BRACKET_PHASE_MIN_UNITS) rather than always assuming single-
+  // elimination's semisSize (2 * ideal) universally applies — semisSize
+  // genuinely means nothing for double-elimination (no Semis round concept
+  // at all).
   var selectedFormat = GAME_FORMATS[document.getElementById('cfg-game-format').value];
   var selectedScheduleLogic = document.getElementById('cfg-schedule-logic').value;
   var floorRoomIdeal = selectedFormat.defaultRoomSize ? selectedFormat.defaultRoomSize.ideal : selectedFormat.idealRoomSize;
   var floorMinUnits = BRACKET_PHASE_MIN_UNITS[selectedScheduleLogic]({ ideal: floorRoomIdeal });
   var unitPl = selectedFormat.unitLabelPlural.toLowerCase();
   if (T.confirmedCount < floorMinUnits) {
-    var floorReason = selectedScheduleLogic === 'classic-elimination'
+    var floorReason = selectedScheduleLogic === 'single-elimination'
       ? ' (Semis is fixed at ' + floorMinUnits + ' ' + unitPl + ' in 2 rooms of ' + floorRoomIdeal + ')'
       : '';
     errEl.textContent = 'This format needs at least ' + floorMinUnits + ' confirmed ' + unitPl +
@@ -451,27 +478,28 @@ function proceedGenerateSchedule() {
       ? distributeRooms(cfg.n, { min: GROUP_SIZE_BOUNDS.min, max: GROUP_SIZE_BOUNDS.max, ideal: cfg.groupSize }).length * cfg.qualifiersPerGroup
       : (cfg.poolingPhase !== 'none' ? cfg.qualAdv : cfg.n);
     var isMultiple = elimEntryCount % ideal === 0;
-    // classic-elimination only needs a clean multiple of idealRoomSize —
-    // its own computeTargets/snapFriendly machinery keeps every LATER
-    // round's target a clean multiple too, once the first one is (verified
-    // during team-3v3's own build). single-elimination (and
-    // double-elimination's own winners bracket — same halving-every-WB-round
-    // shape, see "Double elimination" Part 1 in HANDOFF.md) has no such
-    // snapping/clamping protecting it — its halving-every-round shape means
-    // an even-but-not-power-of-2 count (e.g. 20) would pass a bare
+    // single-elimination only needs a clean multiple of idealRoomSize — its
+    // own computeTargets/snapFriendly machinery keeps every LATER round's
+    // target a clean multiple too, once the first one is (verified during
+    // team-3v3's own build). double-elimination's winners bracket has no
+    // such snapping/clamping protecting it — its halving-every-round shape
+    // means an even-but-not-power-of-2 count (e.g. 20) would pass a bare
     // multiple-of-2 check today but still hit exactly the "room of 1"
     // problem a couple of rounds later (20 -> 10 -> 5, and 5 is odd). None
-    // mode has zero tolerance for that ever happening, so its real
-    // requirement here is strictly stronger for both: an exact power of 2,
-    // not merely an even count.
+    // mode has zero tolerance for that ever happening, so double-
+    // elimination's real requirement here is strictly stronger: an exact
+    // power of 2, not merely an even count. (This used to also apply to the
+    // old, narrower "Single elimination" mechanism — retired in the
+    // 2026-09-08 rename; today's single-elimination is the old "Classic
+    // elimination" mechanism, which never needed this.)
     var isPowerOf2 = elimEntryCount > 0 && (elimEntryCount & (elimEntryCount - 1)) === 0;
-    var needsPowerOf2 = selectedScheduleLogic === 'single-elimination' || selectedScheduleLogic === 'double-elimination';
+    var needsPowerOf2 = selectedScheduleLogic === 'double-elimination';
     var noneModeValid = needsPowerOf2 ? (isMultiple && isPowerOf2) : isMultiple;
     if (!noneModeValid) {
       var otherStrategies = selectedFormat.supportedOddCountStrategies.filter(s => s !== 'none')
         .map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('/');
       var requirement = needsPowerOf2
-        ? 'must be an exact power of 2 (' + (selectedScheduleLogic === 'single-elimination' ? 'single' : 'double') + ' elimination halves the field every round)'
+        ? 'must be an exact power of 2 (double elimination halves the field every round)'
         : 'must be an exact multiple of ' + ideal + ' (this format\'s room size)';
       errEl.textContent = 'With "None" selected as the odd-count strategy, the ' +
         (cfg.poolingPhase !== 'none' ? 'number advancing to the bracket' : 'confirmed ' + unitPl) +
@@ -482,14 +510,15 @@ function proceedGenerateSchedule() {
     }
   }
 
-  // Semis/Final headcount override — only meaningful for classic-elimination
-  // (the only bracket phase that reads gamemodeConfig.semisSize/.finalSize
-  // at all). Unlike this function's other conditional fields (grand-final
-  // targets, group-stage settings), this one is deliberately read only when
-  // it actually applies, not unconditionally — a stray leftover value sitting
-  // in the hidden field from an earlier classic-elimination setup must never
-  // block generation for single/double-elimination, which don't have a
-  // "Semis" concept at all and can't validate an override against anything.
+  // Semis/Final headcount override — Semis is only meaningful for single-
+  // elimination (the only bracket phase with a "Semis" round concept at
+  // all); Final is meaningful for single-elimination AND the shared-final
+  // double-elimination generalization (both read gamemodeConfig.finalSize).
+  // Unlike this function's other conditional fields (grand-final targets,
+  // group-stage settings), these are deliberately read only when they
+  // actually apply, not unconditionally — a stray leftover value sitting in
+  // a hidden field from an earlier setup must never block generation for a
+  // schedule logic that can't validate an override against anything.
   // A headcount only — distributeRooms() still figures out the actual room
   // shape within the format's normal bounds, same as every other round
   // already works. validateRoomCap() (below, after buildProgression()) is
@@ -497,8 +526,10 @@ function proceedGenerateSchedule() {
   // two checks here catch the cases nothing else would — an override that's
   // internally inconsistent, or leaves nothing to eliminate down to.
   var semisOverride = null, finalOverride = null;
-  if (selectedScheduleLogic === 'classic-elimination') {
+  if (selectedScheduleLogic === 'single-elimination') {
     semisOverride = parseInt(document.getElementById('cfg-semis-override').value) || null;
+  }
+  if (selectedScheduleLogic === 'single-elimination' || selectedScheduleLogic === 'double-elimination-shared-final') {
     finalOverride = parseInt(document.getElementById('cfg-final-override').value) || null;
   }
   var elimEntryCountForOverride = cfg.poolingPhase !== 'none' ? cfg.qualAdv : cfg.n;
@@ -512,6 +543,26 @@ function proceedGenerateSchedule() {
       (cfg.poolingPhase !== 'none' ? 'number advancing to the bracket (' : 'confirmed count (') + elimEntryCountForOverride + ') — there\'d be nothing left to eliminate down to it.';
     errEl.style.display = 'block';
     return;
+  }
+
+  // LB qualifiers into the shared Final — only meaningful for the shared-
+  // final double-elimination generalization. Validated here, before any T
+  // mutation below, matching every other check in this function; the
+  // un-overridden Final size isn't computed into T.gamemodeConfig until
+  // further down, so it's recomputed locally via deriveRoomSize() (the same
+  // function that computation will itself call) rather than waiting for it.
+  var lbQualifiers = null;
+  if (selectedScheduleLogic === 'double-elimination-shared-final') {
+    var oddCountStrategyForValidation = selectedFormat.supportedOddCountStrategies && selectedFormat.supportedOddCountStrategies.length > 1
+      ? document.getElementById('cfg-odd-count-strategy').value : undefined;
+    var roomSizeForValidation = deriveRoomSize(selectedFormat, oddCountStrategyForValidation);
+    var prospectiveFinalSize = finalOverride || roomSizeForValidation.ideal;
+    lbQualifiers = parseInt(document.getElementById('cfg-lb-qualifiers').value) || 0;
+    if (!(lbQualifiers >= 1) || !(lbQualifiers < prospectiveFinalSize)) {
+      errEl.textContent = 'LB qualifiers into the Final (' + lbQualifiers + ') must be at least 1 and less than the Final size (' + prospectiveFinalSize + ').';
+      errEl.style.display = 'block';
+      return;
+    }
   }
 
   T.cfg = cfg;
@@ -551,14 +602,20 @@ function proceedGenerateSchedule() {
   // validateRoomCap() further below catches an oversized Final override.
   if (semisOverride) T.gamemodeConfig.semisSize = semisOverride;
   if (finalOverride) T.gamemodeConfig.finalSize = finalOverride;
+  // lbQualifiers is the only new tunable the shared-final generalization
+  // needs beyond what every other bracket phase already reads — WB
+  // qualifiers is derived inside doubleEliminationSharedFinalBracketPhase()
+  // itself as finalSize - lbQualifiers (js/bracket-phases.js), not stored
+  // separately here. Already validated above (>= 1 and < finalSize).
+  if (selectedScheduleLogic === 'double-elimination-shared-final') T.gamemodeConfig.lbQualifiers = lbQualifiers;
   // Phase composability (see POOLING_PHASES/BRACKET_PHASES and "Phase
   // composability refactor" in HANDOFF.md) — poolingPhase is now a direct,
   // real organiser choice (the "Pooling phase" dropdown — None/Qualification
   // Table/Swiss, see "Swiss pooling phase" in HANDOFF.md) rather than a
   // binary checkbox standing in for one; bracketPhase is derived from the
   // "Schedule logic" dropdown (T.scheduleLogic itself, already set above) —
-  // the two registries share key names 1:1 today ('classic-elimination',
-  // 'single-elimination'), so the schedule-logic choice directly determines
+  // the two registries share key names 1:1 today ('single-elimination',
+  // 'double-elimination'), so the schedule-logic choice directly determines
   // which bracket phase composedBuildProgression() runs. finalsGames is
   // copied in alongside them so a bracket phase can read it from
   // descriptor.config like every other tunable, rather than needing cfg

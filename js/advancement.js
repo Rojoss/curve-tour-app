@@ -2,6 +2,53 @@
 // advanceRound() and its double-elimination branch, the cumulative-standings
 // cutoff systems (qual/Swiss/group-stage), and computeRankings().
 
+// Shared lucky-loser selection math (2026-09-08, "FFA/Team double-
+// elimination generalization" in HANDOFF_LOG.md — extracted once a third
+// near-identical copy of this exact logic was about to be added for
+// doubleEliminationComputeAdvancement(), on top of the two that already
+// existed here and in roomBasedComputeAdvancement(); three independently-
+// hand-maintained copies of "find the borderline candidate, compute its
+// relative dominance, sort, slice" is exactly the kind of drift risk this
+// project has been bitten by before). Deliberately NOT a single function
+// that also owns the per-room loop — every caller's loop does other things
+// too (building its own direct-advancer/loser list from the same `scored`
+// array), so re-deriving `scored` a second time inside a fully-owned helper
+// would mean either duplicating orderRoomByScore() calls or awkwardly
+// threading it back out; splitting into "per-room candidate extraction" +
+// "pool-wide selection" keeps each caller's own loop natural while still
+// centralizing the actual selection math in one place.
+
+// Given one room's already tie-resolved, score-sorted list and the round's
+// own advPerRoom, returns { name, pct } for that room's lucky-loser
+// candidate (the unit at position advPerRoom — "missed the direct-advance
+// cutoff by exactly one slot"), or null if there's no such position or the
+// room's total score is 0 (a percentage would be undefined).
+function luckyLoserCandidate(scored, advPerRoom) {
+  var candidate = scored[advPerRoom];
+  if (!candidate) return null;
+  var roomTotal = scored.reduce(function (s, p) { return s + p.score; }, 0);
+  if (roomTotal <= 0) return null;
+  return { name: candidate.name, pct: candidate.score / roomTotal };
+}
+
+// Given a pool of { name, pct } candidates (one per room, from
+// luckyLoserCandidate() above) and how many lucky-loser slots this round
+// has, picks the top luckyCount by pct (highest relative dominance in their
+// own room wins the cross-room comparison) and returns just their names.
+function pickLuckyLosers(candidatePool, luckyCount) {
+  if (!luckyCount || !candidatePool.length) return [];
+  var sorted = candidatePool.slice().sort(function (a, b) { return b.pct - a.pct; });
+  return sorted.slice(0, luckyCount).map(function (c) { return c.name; });
+}
+
+// Display-only preview of who WOULD be lucky losers if the round ended
+// right now (used by Admin/Bracket's live banners, never by the actual
+// advancement path — see roomBasedComputeAdvancement()/
+// doubleEliminationComputeAdvancement() for that). Independently re-derives
+// its own per-room loop (it's called fresh from rendering code, not handed
+// an in-progress loop's own `scored` arrays), but the actual candidate/
+// selection math now comes from the two shared helpers above rather than a
+// third hand-maintained copy of it.
 function computeLuckyLosers(ri, round) {
   if (!round.luckyCount || round.isNoElim || round.isFinal) return [];
   if (!isRoundFullyScored(ri, round)) return [];
@@ -10,20 +57,10 @@ function computeLuckyLosers(ri, round) {
     var players = (T.assignments[ri] || []).filter(a => a.room === rm);
     var raw = players.map((p, pi) => ({ name: p.name, score: getUnitScore(T, ri, rm, pi, 0) }));
     var scored = orderRoomByScore(raw, ri, rm);
-
-    var roomTotal = scored.reduce((sum, p) => sum + p.score, 0);
-    var borderline = scored[round.advPerRoom]; // 0-indexed, so this is position advPerRoom+1
-    if (borderline && roomTotal > 0) {
-      candidates.push({
-        name: borderline.name,
-        score: borderline.score,
-        pct: borderline.score / roomTotal,
-        room: rm
-      });
-    }
+    var c = luckyLoserCandidate(scored, round.advPerRoom);
+    if (c) candidates.push(c);
   }
-  candidates.sort((a, b) => b.pct - a.pct);
-  return candidates.slice(0, round.luckyCount).map(c => c.name);
+  return pickLuckyLosers(candidates, round.luckyCount);
 }
 
 // --- Scoring & Tie-breaks: Tie-break detection ---
@@ -175,9 +212,8 @@ function checkReserveWindow() {
 // round) — checkReserveWindow() above guarantees T.reserveOpen can never be
 // true any later than that, so this never needs to regenerate a bracket
 // phase mid-sequence, only from its own natural (seedTotal, startRoundNum)
-// entry point, which classicEliminationBracketPhase/
-// singleEliminationBracketPhase/doubleEliminationBracketPhase are pure
-// functions of. T.rounds[0..T.curRound] (already-played or currently being
+// entry point, which singleEliminationBracketPhase/doubleEliminationBracketPhase
+// are pure functions of. T.rounds[0..T.curRound] (already-played or currently being
 // scored) is never touched — same historical-integrity principle as the
 // defender-change log. Returns false (nothing committed) if the recomputed
 // tail would violate validateRoomCap() — caller must roll back its own
@@ -523,7 +559,7 @@ function selectPoolingBye(advancing) {
 // roomBasedComputeAdvancement() below (see "True single-elimination bracket
 // phase" in HANDOFF.md for why this needed no schedule-logic-specific
 // version — it was already generic, reading only round.isNoElim/advPerRoom/
-// luckyCount/isQual, nothing classic-elimination-specific).
+// luckyCount/isQual, nothing schedule-logic-specific).
 function advanceRound() {
   var ri = T.curRound, round = T.rounds[ri];
   var nextRound = T.rounds[ri + 1];
@@ -729,10 +765,10 @@ function advanceRound() {
 // gamemode refactor, just extracted so a schedule logic built differently
 // (e.g. Kings Valley's promote/demote) can supply its own version without
 // touching advanceRound()'s shared plumbing above. Reused as-is by both
-// 'classic-elimination' and 'single-elimination' — single-elimination's
-// rounds are just the special case advPerRoom:1, luckyCount:0 always, which
-// this already handles with no branching needed (a room's "top 1" advances,
-// no lucky-loser candidate is ever collected since luckyCount is never > 0).
+// registered schedule logics ('single-elimination', and 'double-
+// elimination''s own pooling-phase rounds — every round.bracket-tagged WB/LB
+// round is intercepted before this is ever reached, see SCHEDULE_LOGICS in
+// js/bracket-phases.js).
 // Returns { advancing: [{name, isLucky}], luckyNames: string[]|null }.
 function roomBasedComputeAdvancement(ri, round, descriptor) {
   // "Last standings round" derived structurally (this round accumulates
@@ -780,19 +816,13 @@ function roomBasedComputeAdvancement(ri, round, descriptor) {
 
     // Candidate for lucky loser: position advPerRoom+1
     if (!round.isNoElim && round.luckyCount > 0 && scored.length > round.advPerRoom) {
-      var candidate = scored[round.advPerRoom];
-      var roomTotal = scored.reduce((s, p) => s + p.score, 0);
-      if (roomTotal > 0)
-        luckyPool.push({ name: candidate.name, pct: candidate.score / roomTotal });
+      var candidate = luckyLoserCandidate(scored, round.advPerRoom);
+      if (candidate) luckyPool.push(candidate);
     }
   }
 
   // Select lucky losers
-  var luckyNames = [];
-  if (round.luckyCount > 0 && luckyPool.length) {
-    luckyPool.sort((a, b) => b.pct - a.pct);
-    luckyNames = luckyPool.slice(0, round.luckyCount).map(p => p.name);
-  }
+  var luckyNames = pickLuckyLosers(luckyPool, round.luckyCount);
 
   var advancing = direct.concat(luckyNames.map(n => ({ name: n, isLucky: true })));
   return { advancing: advancing, luckyNames: luckyNames };
@@ -810,38 +840,87 @@ function roomBasedComputeAdvancement(ri, round, descriptor) {
 // same tie-resolved orderRoomByScore() every other room-based computation
 // uses, so a resolved tie-break here agrees with what elimination-detection
 // (computeRankings' round.bracket branch) later reads back.
+//
+// Generalized (2026-09-08, "FFA/Team double-elimination generalization" in
+// HANDOFF_LOG.md) from the original 1v1-only version, which hardcoded
+// scored[0] as the sole winner and scored[1] as the sole loser per room,
+// unconditionally — that assumption is baked into a strict head-to-head
+// room (round.advPerRoom is always 1 there, luckyCount always 0). This
+// version instead reads round.advPerRoom/round.luckyCount directly, mirroring
+// roomBasedComputeAdvancement()'s own direct-advancer + cross-room
+// lucky-loser split (js/advancement.js, same file) exactly, so both
+// mechanisms agree on what "who advances" means. Confirmed byte-compatible
+// with the old behavior when advPerRoom:1, luckyCount:0 (every registered
+// double-elimination round for individual-1v1/team-3v3, unchanged) — that's
+// what makes reusing this ONE function for both the old 1v1 doubleElimination
+// BracketPhase and the new doubleEliminationSharedFinalBracketPhase safe.
 function doubleEliminationComputeAdvancement(ri, round, descriptor) {
   var asgn = T.assignments[ri] || [];
-  var winners = [], losers = [];
+  var direct = [], loserPool = [], luckyPool = [];
   for (var rm = 1; rm <= round.rooms.length; rm++) {
     var players = asgn.filter(function (a) { return a.room === rm; });
     var raw = players.map(function (p, pi) { return { name: p.name, score: getUnitScore(T, ri, rm, pi, 0) }; });
     var scored = orderRoomByScore(raw, ri, rm);
-    if (scored[0]) winners.push({ name: scored[0].name });
-    if (scored[1]) losers.push({ name: scored[1].name });
+    var thisAdv = round.advPerRoom;
+    for (var i = 0; i < Math.min(thisAdv, scored.length); i++) {
+      direct.push({ name: scored[i].name });
+    }
+    // Everyone below the direct-advance cutoff is a loser candidate by
+    // default — including the lucky-loser candidate slot itself (position
+    // thisAdv): if they don't win the cross-room lucky-loser comparison
+    // below, they're still a loser, dropping to the losers bracket like
+    // anyone else who didn't advance.
+    for (var j = thisAdv; j < scored.length; j++) {
+      loserPool.push({ name: scored[j].name });
+    }
+    if (round.luckyCount > 0 && scored.length > thisAdv) {
+      var candidate = luckyLoserCandidate(scored, thisAdv);
+      if (candidate) luckyPool.push(candidate);
+    }
   }
-  return { winners: winners, losers: losers };
+  var luckyNames = pickLuckyLosers(luckyPool, round.luckyCount);
+  var luckyNameSet = {};
+  luckyNames.forEach(function (n) { luckyNameSet[n] = true; });
+  var winners = direct.concat(luckyNames.map(function (n) { return { name: n }; }));
+  var losers = loserPool.filter(function (l) { return !luckyNameSet[l.name]; });
+  // luckyNames returned (2026-09-08, Stage B4 rendering-verification pass) so
+  // advanceDoubleEliminationRound() can record it into T.luckyLosers, same as
+  // the generic path already does with roomBasedComputeAdvancement()'s own
+  // luckyNames — see that function's write site for why this was missing
+  // until now (harmless for the old 1v1 case, luckyCount always 0 there; a
+  // real, visible gap for the FFA/team generalization, where it isn't).
+  return { winners: winners, losers: losers, luckyNames: luckyNames };
 }
 
 // Materializes whatever's staged in T.pendingBracketSeeds[idx] into
 // T.assignments[idx] — called the moment T.curRound actually reaches idx,
 // by which point (per the load-bearing property in the topology comment
 // above) every contribution that round needs has already arrived. Odd-pool
-// self-correction here always uses "highest remaining seed" (pool[0]), the
-// same convention singleEliminationBracketPhase's own later-round self-
+// self-correction here always uses "highest remaining seed(s)" (pool[0..]),
+// the same convention singleEliminationBracketPhase's own later-round self-
 // correction uses — the fair-rotation convention (selectPoolingBye) is
 // pooling-phase-only (see "Fair bye rotation during pooling phases" in
 // HANDOFF.md) and doesn't apply once inside the bracket phase.
+//
+// byeChosen is an ARRAY now (2026-09-08, "FFA/Team double-elimination
+// generalization" in HANDOFF_LOG.md) — was a single unit or null/undefined
+// when every round was strictly head-to-head (at most 1 leftover could ever
+// need a bye). A room-based round (roomSize.ideal > 2) can leave more than
+// one unit short of a clean room split, so the caller
+// (advanceDoubleEliminationRound) now always passes an array, empty when no
+// bye is needed. Byte-compatible with the old single-unit call sites: an
+// empty array behaves exactly like the old falsy/null case below.
 function finalizeDoubleEliminationRound(idx, byeChosen) {
   var targetRound = T.rounds[idx];
   var descriptor = getGamemodeDescriptor();
   var pool = (T.pendingBracketSeeds[idx] || []).slice();
   delete T.pendingBracketSeeds[idx];
-  if (byeChosen) pool = pool.filter(function (u) { return u.name !== byeChosen.name; });
+  var byeNames = (byeChosen || []).map(function (u) { return u.name; });
+  if (byeNames.length) pool = pool.filter(function (u) { return byeNames.indexOf(u.name) === -1; });
   T.assignments[idx] = snakeSeed(pool, targetRound.rooms.length, descriptor.format);
-  if (byeChosen) {
-    T.byes[idx] = [byeChosen.name];
-    T.assignments[idx].push({ name: byeChosen.name, room: null, isLucky: false });
+  if (byeNames.length) {
+    T.byes[idx] = byeNames;
+    byeNames.forEach(function (name) { T.assignments[idx].push({ name: name, room: null, isLucky: false }); });
   } else {
     T.byes[idx] = [];
   }
@@ -876,6 +955,7 @@ function advanceDoubleEliminationRound(ri, round) {
   if (round.bracket === 'grand-final') return;
 
   var descriptor = getGamemodeDescriptor();
+  var roomSize = descriptor.config.roomSize;
   var result = doubleEliminationComputeAdvancement(ri, round, descriptor);
 
   // A bye recipient THIS round (room:null, never seen by the per-room loop
@@ -904,39 +984,82 @@ function advanceDoubleEliminationRound(ri, round) {
   if (round.winnersTo === nextIdx) poolAtNext = pendingWinners;
   if (round.losersTo === nextIdx) poolAtNext = pendingLosers;
 
-  // The grand final always needs EXACTLY 2 entrants (the WB and LB
-  // champions) — a bye there is meaningless (no round after it to carry a
-  // bye recipient into; they'd just be a third, non-playing "entrant").
-  // Under normal play this is structurally guaranteed by construction (the
-  // WB final and LB final-absorb round each always contribute exactly one
-  // winner). A live mid-tournament withdrawal can still break this,
-  // though — found via direct testing during this build: a single
-  // withdrawal early in the winners bracket can leave the losers bracket's
-  // own multi-stage absorb/survive arithmetic off by one several rounds
-  // later, since each round's self-correction bye is a LOCAL, live decision
-  // rather than a full re-plan of the remaining topology (a substantially
-  // bigger undertaking than "the same rare-recovery bye mechanism" this
-  // build reuses everywhere else — see "Double elimination" in HANDOFF.md).
-  // Refuse loudly here rather than silently seed a malformed 1/3-entrant
-  // grand final — same philosophy as the existing nextRound.isFinal guard
-  // every other bracket type already has.
-  if (T.rounds[nextIdx].bracket === 'grand-final' && poolAtNext.length !== 2) {
-    alert('Can\'t advance into the grand final — ' + poolAtNext.length + ' entrants would arrive instead of the required 2. A mid-tournament withdrawal has likely thrown off the losers bracket\'s balance too deeply for the usual single-bye recovery to fix automatically; check Manage Teams, or add a replacement, before advancing further.');
+  // The Final round (the old grand-final's fixed 2, or the new shared
+  // Final's fixed finalSize — both isFinal:true, checked generically via
+  // T.rounds[nextIdx].players rather than a bracket==='grand-final'-specific
+  // literal 2, 2026-09-08 "FFA/Team double-elimination generalization")
+  // always needs EXACTLY as many entrants as it was generated to expect — a
+  // bye there is meaningless (no round after it to carry a bye recipient
+  // into; they'd just be a non-playing extra entrant). Under normal play
+  // this is structurally guaranteed by construction (WB's own final round
+  // and LB's own final round each contribute exactly the configured
+  // wbQualifiers/lbQualifiers — or, for the old grand-final, exactly one
+  // winner each). A live mid-tournament withdrawal can still break this,
+  // though — found via direct testing during the original 1v1 build: a
+  // single withdrawal early in the winners bracket can leave the losers
+  // bracket's own arithmetic off by one several rounds later, since each
+  // round's self-correction bye is a LOCAL, live decision rather than a
+  // full re-plan of the remaining topology (a substantially bigger
+  // undertaking than "the same rare-recovery bye mechanism" this build
+  // reuses everywhere else — see "Double elimination" in HANDOFF.md).
+  // Refuse loudly here rather than silently seed a malformed Final — same
+  // philosophy as the existing nextRound.isFinal guard every other bracket
+  // type already has.
+  if (T.rounds[nextIdx].isFinal && poolAtNext.length !== T.rounds[nextIdx].players) {
+    alert('Can\'t advance into the Final — ' + poolAtNext.length + ' entrants would arrive instead of the required ' + T.rounds[nextIdx].players + '. A mid-tournament withdrawal has likely thrown off the losers bracket\'s balance too deeply for the usual single-bye recovery to fix automatically; check Manage Teams, or add a replacement, before advancing further.');
     return;
   }
 
-  var byeChosen = null;
-  if (poolAtNext.length % 2 !== 0) {
-    if (descriptor.config.oddCountStrategy !== 'bye') {
-      alert('Can\'t advance — an odd number (' + poolAtNext.length + ') of units would be heading into the next round, which can\'t form a clean head-to-head match. This usually means a team was removed mid-tournament; check Manage Teams before advancing.');
-      return;
+  // Odd-pool self-correction for an ORDINARY (non-Final) WB/LB round only —
+  // the Final's own exact-count requirement was already checked above.
+  // Only relevant for a STRICT room size (roomSize.min === roomSize.max,
+  // e.g. the old 1v1/team-3v3's head-to-head shape, or team-3v3v3/
+  // team-2v2v2v2/FFA under a strict-ideal odd-count strategy) — a FLEXIBLE
+  // room size (roomSize.min < roomSize.max, FFA/2v2v2v2/3v3v3's normal
+  // default shape) can already form a valid room split for essentially any
+  // positive count via distributeRooms()'s own min/max window, exactly the
+  // same reason distributeRoomsWithBye() itself never produces a bye for
+  // those formats at generation time either (js/formats-and-primitives.js).
+  // byeChosen is now an ARRAY (see finalizeDoubleEliminationRound()'s own
+  // comment) — a room-based strict shape (roomSize.ideal > 2) can leave
+  // more than one unit short of a clean split, unlike the old head-to-head-
+  // only case where at most 1 ever could.
+  var byeChosen = [];
+  if (roomSize.min === roomSize.max) {
+    var byeNeeded = poolAtNext.length % roomSize.ideal;
+    if (byeNeeded > 0) {
+      if (descriptor.config.oddCountStrategy !== 'bye') {
+        alert('Can\'t advance — ' + poolAtNext.length + ' units would be heading into the next round, which can\'t form a clean room split (needs a multiple of ' + roomSize.ideal + '). This usually means a team was removed mid-tournament; check Manage Teams before advancing.');
+        return;
+      }
+      byeChosen = poolAtNext.slice(0, byeNeeded);
     }
-    byeChosen = poolAtNext[0];
   }
 
   // Validated — safe to commit.
   if (round.winnersTo !== null && round.winnersTo !== undefined) T.pendingBracketSeeds[round.winnersTo] = pendingWinners;
   if (round.losersTo !== null && round.losersTo !== undefined) T.pendingBracketSeeds[round.losersTo] = pendingLosers;
+
+  // Record which units arrived at winnersTo via the cross-room lucky-loser
+  // comparison — mirrors the generic advanceRound() path's own
+  // "T.luckyLosers[ri+1] = result.luckyNames" (this file, above), just keyed
+  // by the round's actual winnersTo destination rather than ri+1, since a
+  // WB/LB round's winners don't always land on the very next array index
+  // (an interposed round from the other bracket can sit between them — see
+  // the topology comment above doubleEliminationBracketPhase). Concatenated,
+  // not overwritten: winnersTo can be the shared Final for BOTH the winners'
+  // bracket's own last round AND the losers' bracket's own last round (the
+  // FFA/Team merged-Final topology), so a second contribution must add to
+  // the first, never replace it. losersTo needs no equivalent write — the
+  // lucky-loser mechanism only ever decides who escapes UP into winners;
+  // nobody "lucks" their way into the losers bracket. Found and fixed
+  // 2026-09-08 during Stage B4's rendering-verification pass — without this,
+  // Bracket/Admin's ★ marker never appeared for a WB/LB lucky-loser winner,
+  // and worse, they'd render with the 'elim' (grey/struck-through) style on
+  // their own round's card despite having actually advanced.
+  if (round.winnersTo !== null && round.winnersTo !== undefined && result.luckyNames && result.luckyNames.length) {
+    T.luckyLosers[round.winnersTo] = (T.luckyLosers[round.winnersTo] || []).concat(result.luckyNames);
+  }
 
   T.curRound = nextIdx;
   finalizeDoubleEliminationRound(nextIdx, byeChosen);
@@ -1131,9 +1254,18 @@ function computeRankings(state) {
         var raw = byRoom[rm].map((p, pi) => ({ name: p.name, score: getUnitScore(state, ri, rm, pi, 0) }));
         var scored = orderRoomByScore(raw, ri, rm, state);
         var roomTotal = scored.reduce((sum, p) => sum + p.score, 0);
-        scored.forEach((p, pi) => {
-          var targetNames = pi === 0 ? winnersToNames : losersToNames;
-          if (!targetNames || !targetNames.has(p.name)) {
+        // Membership check, NOT position (pi===0) — a room-based double-
+        // elimination round (2026-09-08 "FFA/Team double-elimination
+        // generalization") can have several direct-advancing winners AND a
+        // lucky-loser winner who sits well below position 0, so "did this
+        // unit actually end up in winnersTo" is the only correct test.
+        // Identical result to the old positional check for the original
+        // 1v1 shape (where position 0 alone was ever a winner), so this is
+        // a strict generalization, not a behavior change for that case.
+        scored.forEach(p => {
+          var inWinners = winnersToNames && winnersToNames.has(p.name);
+          var inLosers = losersToNames && losersToNames.has(p.name);
+          if (!inWinners && !inLosers) {
             eliminatedInfo[p.name] = { ri, round, pct: roomTotal > 0 ? p.score / roomTotal : 0 };
           }
         });
