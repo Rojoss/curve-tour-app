@@ -33,6 +33,11 @@
 1. [x] Typed state model, clocks/random/ID injection, and fixture utilities.
 2. [x] Pure format, room-distribution, scoring, and roster primitives.
 3. [ ] Pooling and bracket schedule generation.
+   - [x] Qualification, Swiss, Group Stage, and no-pooling warmup schedules.
+   - [x] Single-elimination targets, rooms, byes, lucky-loser slots, Semis,
+     and Final schedule generation.
+   - [ ] Race-style head-to-head double-elimination topology.
+   - [ ] Shared-Final FFA/team double-elimination topology.
 4. [ ] Advancement, ties, byes, double-elimination routing, and rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.

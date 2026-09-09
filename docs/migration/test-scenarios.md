@@ -29,6 +29,12 @@ boundaries. Fix random seed, clock, and ID generator.
 - [x] Physical room-cap validation at 10 and rejection above 10.
 - [ ] Semis/Final sizes and 1–4 game combinations.
 - [ ] WB/LB target races and shared-Final LB qualifier boundaries.
+- [x] Circle-method schedules for even and odd group sizes, mixed group lengths,
+  snake seeding, whole-group byes, and single/double round robin.
+- [x] Representative Qualification, Swiss-with-bye, no-pooling flex, and Group
+  Stage schedule structures against the frozen legacy functions.
+- [x] Representative FFA gradual-cut and head-to-head-bye single-elimination
+  schedules, including lucky-loser counts and multi-game Semis/Final metadata.
 
 Each fixture should contain selected setup, normalized roster, generated rounds,
 assignments, byes, pending seeds, and relevant validation text.
