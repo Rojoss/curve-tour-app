@@ -2,6 +2,7 @@ export * from "./advancement";
 export * from "./fixtures";
 export * from "./double-elimination";
 export * from "./formats";
+export * from "./generation";
 export * from "./finals";
 export * from "./pooling";
 export * from "./rankings";

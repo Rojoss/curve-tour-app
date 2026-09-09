@@ -13,7 +13,7 @@ an isolated service or human review.
 - [x] Lock clears the browser marker/proof and returns to Bracket.
 - [ ] Successful automated lock and unlock round trip against an isolated service.
 - [ ] Shared viewer promotion to writer.
-- [ ] Narrow viewport navigation and focus behavior.
+- [x] Narrow viewport navigation and focus behavior.
 
 ## Deterministic algorithm matrix
 
