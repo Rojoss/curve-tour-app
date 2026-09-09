@@ -55,7 +55,7 @@
 5. [x] Browser persistence and backwards-compatible normalization.
 6. [x] Shell, navigation, authentication modal, and setup UI.
 7. [x] Roster management, preview, and running Admin UI.
-8. [ ] Scoreboard and Rankings UI.
+8. [x] Scoreboard and Rankings UI.
 9. [ ] Bracket UI, follow/collapse behavior, and direct score entry.
 10. [ ] Archive UI, JSON transfer, annotations, and PNG downloads.
 11. [ ] Firebase viewer/writer transport and concurrent merge behavior.

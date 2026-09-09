@@ -3,6 +3,8 @@ import type { ActiveTab } from "../../domain/tournament";
 import { AdminPasswordModal } from "../auth/AdminPasswordModal";
 import { SetupView } from "../admin/SetupView";
 import { RunningAdmin } from "../admin/RunningAdmin";
+import { RankingsView } from "../rankings/RankingsView";
+import { ScoreboardView } from "../scoreboard/ScoreboardView";
 import { useTournamentApp } from "../tournament/TournamentProvider";
 
 const TABS: Array<{ key: ActiveTab; label: string }> = [
@@ -72,9 +74,7 @@ export function AppShell() {
           </section>
         ) : null}
         {app.activeTab === "scoreboard" ? (
-          <section id="view-scoreboard">
-            <EmptyView>{app.state.started ? "Live scoreboard is loading." : "Start a tournament in Admin to see the live scoreboard."}</EmptyView>
-          </section>
+          <section id="view-scoreboard"><ScoreboardView /></section>
         ) : null}
         {app.activeTab === "bracket" ? (
           <section id="view-bracket">
@@ -82,9 +82,7 @@ export function AppShell() {
           </section>
         ) : null}
         {app.activeTab === "rankings" ? (
-          <section id="view-rankings">
-            <EmptyView>{app.state.players.length ? "Tournament rankings are loading." : "No players registered yet — check back once the organiser loads a roster in Admin."}</EmptyView>
-          </section>
+          <section id="view-rankings"><RankingsView /></section>
         ) : null}
         {app.activeTab === "archive" ? (
           <section id="view-archive"><EmptyView>No tournaments archived yet — completed tournaments saved from Admin will show up here, or import a previously exported file.</EmptyView></section>

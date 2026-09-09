@@ -111,6 +111,7 @@ tr.tie-row td { background: #ff4d6a12; }
 .pill-adv { background: #00e09618; color: var(--green); }
 .pill-elim, .pill-tie { background: #ff4d6a18; color: var(--red); }
 .pill-neut { background: #6b7a9918; color: var(--muted); }
+.pill-final { background: #00e5ff18; color: var(--cyan); }
 .pill-lucky { background: #b57bff18; color: var(--purple); }
 .adv-marker { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 6px 6px; padding: 5px; background: #00e09610; font-size: 10px; font-style: italic; text-align: center; }
 input[type="number"].score-inp { width: 90px; padding: 5px 7px; font: 700 18px var(--font-d); text-align: center; }
@@ -125,6 +126,16 @@ input[type="number"].score-inp { width: 90px; padding: 5px 7px; font: 700 18px v
 .game-tabs button.active { border-color: var(--cyan); background: var(--cyan-dim); color: var(--cyan); }
 .race-status { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
 .standings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 14px; }
+.rk-section-title { margin: 18px 0 8px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1.3px; text-transform: uppercase; }
+.rk-columns { columns: 300px 3; column-gap: 14px; }
+.rk-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 8px; break-inside: avoid; min-height: 52px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; background: var(--surface); }
+.rk-row.rk-champion { border-color: #00e09666; background: #00e09608; }
+.rk-rank { color: var(--muted); font: 700 18px var(--font-d); text-align: center; }
+.rk-unit { min-width: 0; }
+.rk-sub { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.rk-sub strong { color: var(--cyan); }
+.rk-sub strong.amber { color: var(--amber); }
+.rk-status { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; color: var(--amber); font-size: 10px; }
 .admin-actions { position: sticky; bottom: 10px; z-index: 20; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #0d0f14e8; backdrop-filter: blur(8px); }
 .modal-overlay { display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 1000; padding: 20px; background: #000b; }
 .modal-box { width: min(440px, 100%); border: 1px solid var(--border); border-radius: 10px; padding: 22px; background: var(--surface); box-shadow: 0 20px 80px #000a; }

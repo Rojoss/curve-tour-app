@@ -88,7 +88,9 @@ assignments, byes, pending seeds, and relevant validation text.
   and the undecided open-next-game condition.
 - [x] Fixed multi-game Final totals, completeness, next-game selection, and
   cumulative ordering independent of the known legacy tab defect.
-- [ ] Final rankings for finalist, eliminated, bye, tie-break, and team cases.
+- [x] Representative live active rankings and completed Final champion,
+  finalist, and eliminated order in the replacement UI.
+- [ ] Additional Final rankings for bye, tie-break, and team display cases.
 - [x] Representative complete/incomplete Final rankings, room-share ordering,
   active pooling metadata, and double-elimination second-loss ranking.
 
