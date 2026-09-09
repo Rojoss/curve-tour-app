@@ -49,7 +49,9 @@
    - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
    - [x] Fixed-game Final progress and Grand Final race calculation/open-next
      decision.
-   - [ ] Grand Final state-transition integration and tournament rankings.
+   - [x] Tournament rankings for active, finalist, ordinary-elimination, and
+     double-elimination states.
+   - [ ] Grand Final and round state-transition integration.
 5. [ ] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.
 7. [ ] Roster management, preview, and running Admin UI.

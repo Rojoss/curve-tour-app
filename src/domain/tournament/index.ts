@@ -4,6 +4,7 @@ export * from "./double-elimination";
 export * from "./formats";
 export * from "./finals";
 export * from "./pooling";
+export * from "./rankings";
 export * from "./room-distribution";
 export * from "./roster";
 export * from "./runtime";

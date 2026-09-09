@@ -88,6 +88,8 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Fixed multi-game Final totals, completeness, next-game selection, and
   cumulative ordering independent of the known legacy tab defect.
 - [ ] Final rankings for finalist, eliminated, bye, tie-break, and team cases.
+- [x] Representative complete/incomplete Final rankings, room-share ordering,
+  active pooling metadata, and double-elimination second-loss ranking.
 
 ## Persistence and archives
 
