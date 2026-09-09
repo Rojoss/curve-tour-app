@@ -20,16 +20,17 @@
 - [x] Add offline admin/configuration/team parsing/persistence/progression
   characterization coverage.
 - [x] Record two observed Final-completion defects as explicit parity decisions.
-- [x] Pass `pnpm check` and all 15 browser characterization/visual tests after
+- [x] Pass `pnpm check` and all 16 browser characterization/visual tests after
   the expanded admin investigation.
 - [x] Tag the original legacy commit as `pre-tanstack-migration-2026-09-09`.
-- [ ] Commit the preparation artifacts after review.
-- [ ] Capture human-approved legacy screenshots and fixture exports.
+- [x] Commit the preparation artifacts after review (`1c7926f`).
+- [x] Owner confirmed no representative export exists; use synthetic fixtures
+  alongside the recorded legacy screenshots and browser characterizations.
 - [ ] Provision an isolated Firebase test project.
 
 ## Migration slices
 
-1. [ ] Typed state model, clocks/random/ID injection, and fixture utilities.
+1. [x] Typed state model, clocks/random/ID injection, and fixture utilities.
 2. [ ] Pure format, room-distribution, scoring, and roster primitives.
 3. [ ] Pooling and bracket schedule generation.
 4. [ ] Advancement, ties, byes, double-elimination routing, and rankings.

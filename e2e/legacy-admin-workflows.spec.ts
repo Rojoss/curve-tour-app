@@ -117,6 +117,97 @@ test("locking Admin clears both browser credentials and returns to Bracket", asy
   await expect(page.locator("#admin-pw-overlay")).toBeVisible();
 });
 
+test("persists the exact fresh legacy envelope shape", async ({
+  context,
+  page,
+}) => {
+  await blockFirebase(context);
+  await openUnlockedAdmin(context, page);
+
+  const envelope = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("curveFFA_state_v1") ?? "{}"),
+  );
+  expect(Object.keys(envelope).sort()).toEqual(["T", "activeTab", "setup"]);
+  expect(Object.keys(envelope.T).sort()).toEqual(
+    [
+      "assignments",
+      "autoSaved",
+      "byes",
+      "cfg",
+      "confirmedCount",
+      "curRound",
+      "defenderChanges",
+      "finalScores",
+      "gameFormat",
+      "gamemodeConfig",
+      "groupStandings",
+      "groups",
+      "luckyLosers",
+      "needsSave",
+      "pendingBracketSeeds",
+      "players",
+      "poolingByeCounts",
+      "qualTable",
+      "reserveIndividuals",
+      "reserveOpen",
+      "reserves",
+      "rounds",
+      "scheduleLogic",
+      "scores",
+      "started",
+      "tieResolutions",
+      "title",
+      "tournamentId",
+    ].sort(),
+  );
+  expect(Object.keys(envelope.setup).sort()).toEqual(
+    [
+      "finalOverride",
+      "finalsGames",
+      "gameFormat",
+      "grandFinalLbTarget",
+      "grandFinalWbTarget",
+      "groupSize",
+      "oddCountStrategy",
+      "poolingPhase",
+      "qualAdv",
+      "qualifiersPerGroup",
+      "reserveIndividuals",
+      "reserves",
+      "roster",
+      "roundRobinMode",
+      "scheduleLogic",
+      "scoring",
+      "semisGames",
+      "semisOverride",
+      "teamScoringRule",
+    ].sort(),
+  );
+  expect(envelope.activeTab).toBe("admin");
+  expect(envelope.setup).toEqual({
+    finalOverride: "",
+    finalsGames: "3",
+    gameFormat: "ffa-individual",
+    grandFinalLbTarget: "3",
+    grandFinalWbTarget: "2",
+    groupSize: "4",
+    oddCountStrategy: "",
+    poolingPhase: "none",
+    qualAdv: "24",
+    qualifiersPerGroup: "2",
+    reserveIndividuals: "",
+    reserves: "",
+    roster: "",
+    roundRobinMode: "single",
+    scheduleLogic: "single-elimination",
+    scoring: "fairpoints",
+    semisGames: "1",
+    semisOverride: "",
+    teamScoringRule: "",
+  });
+  expect(envelope.setup).not.toHaveProperty("lbQualifiers");
+});
+
 test("3v3 exposes team fields and changes double-elimination compatibility in Flex mode", async ({
   context,
   page,

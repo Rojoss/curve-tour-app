@@ -19,9 +19,8 @@ Never place an admin password in the repository or chat.
 
 ## Recommended decisions
 
-- [ ] Final behavior: approve fixing both observed legacy Final defects during
-  their migration slice (recommended), or require strict preservation. The
-  defects and passing characterization tests are recorded in `decisions.md`.
+- [x] Final behavior: fix both observed legacy Final defects when their migration
+  slice is reached if the correction stays small; otherwise defer them.
 - [ ] Visual parity: approve near-pixel parity during migration, with redesign
   deferred until after cutover.
 - [ ] Wording parity: approve exact existing labels, messages, and confirmation

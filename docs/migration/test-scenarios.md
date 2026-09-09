@@ -67,6 +67,7 @@ assignments, byes, pending seeds, and relevant validation text.
 
 ## Persistence and archives
 
+- [x] Exact fresh-state envelope keys and setup value types/defaults.
 - [ ] Reload each setup field and active tab.
 - [x] Reload running tournament, scores, title, active tab, and advance afterward.
 - [ ] Viewer proves it never writes `curveFFA_state_v1`.

@@ -89,13 +89,17 @@ vacant slot and must survive local, Firebase, and archive serialization.
     scheduleLogic, gameFormat, scoring, poolingPhase, qualAdv,
     groupSize, roundRobinMode, qualifiersPerGroup,
     finalsGames, semisGames, grandFinalWbTarget, grandFinalLbTarget,
-    semisOverride, finalOverride, lbQualifiers,
+    semisOverride, finalOverride,
     oddCountStrategy, teamScoringRule, roster, reserves,
     reserveIndividuals
   },
   activeTab: "admin" | "scoreboard" | "bracket" | "rankings" | "archive"
 }
 ```
+
+`cfg-lb-qualifiers` is currently read during generation but is not written to
+the persisted `setup` object. This observed omission is covered by a legacy
+characterization test and recorded for an explicit persistence-slice decision.
 
 Before implementing the persistence adapter, capture real fixtures for a fresh
 setup, generated preview, running individual tournament, running team tournament,

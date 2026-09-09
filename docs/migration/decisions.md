@@ -14,6 +14,10 @@
 7. Production Firebase is blocked in automated tests.
 8. Feature work lands as bounded vertical slices with contract tests and reviewable
    commits, never as an all-at-once rewrite.
+9. The owner approved fixing the two observed Final defects when their scoring/UI
+   slice is reached if the correction stays small. Keep their characterization
+   tests until then, and document the intentional behavior change when updating
+   those tests.
 
 ## Decisions required before affected slices
 
@@ -25,13 +29,10 @@
 - Where will the TanStack server build be hosted, and does that platform support
   the chosen Nitro output?
 - Should current user-facing wording be frozen exactly or only semantically?
-- Should the replacement intentionally fix the observed Final-completion defects,
-  or preserve them for strict parity? In the frozen app, a scored single-game
-  Final remains incomplete in Rankings and never auto-archives. In a multi-game
-  Final, selecting Game 2, Game 3, or Total hides the entire score panel because
-  the tab switch also hides its `fg-wrap` parent. Both were reproduced in the
-  production-connected legacy UI on 2026-09-09 and are covered by offline
-  characterization tests.
+- The legacy persistence envelope does not save the `cfg-lb-qualifiers` setup
+  value even though the initial storage inventory claimed it did. Decide in the
+  persistence slice whether this should remain a compatibility quirk or be fixed
+  while continuing to read old envelopes that omit it.
 
 These questions do not block domain-logic and local UI slices, but they do block
 sync, deployment, and final visual acceptance.
