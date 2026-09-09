@@ -140,3 +140,87 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
     groupOrder: ["A", "B", "C", "D"],
   });
 });
+
+test("characterizes cumulative qualification and group standings", async ({
+  page,
+}) => {
+  const actual = await page.evaluate(() => {
+    const legacy = window as unknown as Record<string, any>;
+    const baseRound = {
+      players: 4, rooms: [2, 2], byeCount: 0, isNoElim: true,
+      isSemis: false, isFinal: false, advPerRoom: null, advTotal: 4,
+      luckyCount: 0,
+    };
+    Object.assign(legacy.T, {
+      gameFormat: "ffa-individual",
+      players: ["A", "B", "C", "D"],
+      reserves: [],
+      rounds: [
+        { ...baseRound, roundNum: 1, isQual: true },
+        { ...baseRound, roundNum: 2, isQual: true },
+      ],
+      assignments: [
+        [
+          { name: "A", room: 1 }, { name: "B", room: 1 },
+          { name: "C", room: 2 }, { name: "D", room: 2 },
+        ],
+        [
+          { name: "A", room: 1 }, { name: "C", room: 1 },
+          { name: "B", room: 2 }, { name: "D", room: 2 },
+        ],
+      ],
+      scores: {
+        "r0-rm1-p0": 100, "r0-rm1-p1": 50,
+        "r0-rm2-p0": 90, "r0-rm2-p1": 80,
+        "r1-rm1-p0": 70, "r1-rm1-p1": 60,
+        "r1-rm2-p0": 50, "r1-rm2-p1": 40,
+      },
+      finalScores: {}, defenderChanges: {}, tieResolutions: {},
+      gamemodeConfig: {},
+    });
+    legacy.updateQualTable();
+    const qualification = legacy.T.qualTable;
+
+    Object.assign(legacy.T, {
+      players: ["A1", "A2", "B1", "B2"],
+      groups: [
+        { label: "A", members: ["A1", "A2"] },
+        { label: "B", members: ["B1", "B2"] },
+      ],
+      rounds: [{
+        ...baseRound, roundNum: 1, isQual: false, isGroupStage: true,
+        roomGroups: ["A", "B"],
+      }],
+      assignments: [[
+        { name: "A1", room: 1 }, { name: "A2", room: 1 },
+        { name: "B1", room: 2 }, { name: "B2", room: 2 },
+      ]],
+      scores: {
+        "r0-rm1-p0": 100, "r0-rm1-p1": 50,
+        "r0-rm2-p0": 90, "r0-rm2-p1": 80,
+      },
+      groupStandings: {}, cfg: { qualifiersPerGroup: 1 },
+    });
+    legacy.updateGroupStandings();
+    return { qualification, groups: legacy.T.groupStandings };
+  });
+
+  expect(actual).toEqual({
+    qualification: [
+      { name: "A", totalFP: 1.9983, totalScore: 170, played: 2 },
+      { name: "C", totalFP: 2.9985, totalScore: 150, played: 2 },
+      { name: "B", totalFP: 2.999, totalScore: 100, played: 2 },
+      { name: "D", totalFP: 3.9988, totalScore: 120, played: 2 },
+    ],
+    groups: {
+      A: [
+        { name: "A1", totalFP: 0.999, totalScore: 100, played: 1 },
+        { name: "A2", totalFP: 1.9995, totalScore: 50, played: 1 },
+      ],
+      B: [
+        { name: "B1", totalFP: 0.9991, totalScore: 90, played: 1 },
+        { name: "B2", totalFP: 1.9992, totalScore: 80, played: 1 },
+      ],
+    },
+  });
+});

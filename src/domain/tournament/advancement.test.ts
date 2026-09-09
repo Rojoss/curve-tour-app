@@ -3,6 +3,9 @@ import {
   applyGroupCutoffOrder,
   applyQualCutoffOrder,
   createEmptyTournamentState,
+  computeGroupStageAdvancement,
+  computeGroupStandings,
+  computeQualificationStandings,
   detectGroupCutoffTie,
   detectQualCutoffTie,
   detectTieBreaks,
@@ -147,5 +150,79 @@ describe("standings cutoff ties", () => {
         (entry) => entry.name,
       ),
     ).toEqual(["A", "B", "C", "D"]);
+  });
+});
+
+describe("cumulative standings", () => {
+  it("accumulates qualification Fair Points across rounds", () => {
+    const qualRound = { ...round, rooms: [2, 2], players: 4, isQual: true, isNoElim: true };
+    const tournament = createEmptyTournamentState({
+      players: ["A", "B", "C", "D"],
+      rounds: [{ ...qualRound, roundNum: 1 }, { ...qualRound, roundNum: 2 }],
+      assignments: [
+        [
+          { name: "A", room: 1 }, { name: "B", room: 1 },
+          { name: "C", room: 2 }, { name: "D", room: 2 },
+        ],
+        [
+          { name: "A", room: 1 }, { name: "C", room: 1 },
+          { name: "B", room: 2 }, { name: "D", room: 2 },
+        ],
+      ],
+      scores: {
+        "r0-rm1-p0": 100, "r0-rm1-p1": 50,
+        "r0-rm2-p0": 90, "r0-rm2-p1": 80,
+        "r1-rm1-p0": 70, "r1-rm1-p1": 60,
+        "r1-rm2-p0": 50, "r1-rm2-p1": 40,
+      },
+    });
+    expect(computeQualificationStandings(tournament)).toEqual([
+      { name: "A", totalFP: 1.9983, totalScore: 170, played: 2 },
+      { name: "C", totalFP: 2.9985, totalScore: 150, played: 2 },
+      { name: "B", totalFP: 2.999, totalScore: 100, played: 2 },
+      { name: "D", totalFP: 3.9988, totalScore: 120, played: 2 },
+    ]);
+  });
+
+  it("keeps group tables separate and seeds qualifiers by finish tier", () => {
+    const groupRound = {
+      ...round,
+      players: 4,
+      rooms: [2, 2],
+      roomGroups: ["A", "B"],
+      isGroupStage: true,
+      isNoElim: true,
+    };
+    const tournament = createEmptyTournamentState({
+      players: ["A1", "A2", "B1", "B2"],
+      groups: [
+        { label: "A", members: ["A1", "A2"] },
+        { label: "B", members: ["B1", "B2"] },
+      ],
+      rounds: [groupRound],
+      assignments: [[
+        { name: "A1", room: 1 }, { name: "A2", room: 1 },
+        { name: "B1", room: 2 }, { name: "B2", room: 2 },
+      ]],
+      scores: {
+        "r0-rm1-p0": 100, "r0-rm1-p1": 50,
+        "r0-rm2-p0": 90, "r0-rm2-p1": 80,
+      },
+      cfg: { qualifiersPerGroup: 1 },
+    });
+    expect(computeGroupStandings(tournament)).toEqual({
+      A: [
+        { name: "A1", totalFP: 0.999, totalScore: 100, played: 1 },
+        { name: "A2", totalFP: 1.9995, totalScore: 50, played: 1 },
+      ],
+      B: [
+        { name: "B1", totalFP: 0.9991, totalScore: 90, played: 1 },
+        { name: "B2", totalFP: 1.9992, totalScore: 80, played: 1 },
+      ],
+    });
+    expect(computeGroupStageAdvancement(tournament).advancing).toEqual([
+      { name: "A1", isLucky: false },
+      { name: "B1", isLucky: false },
+    ]);
   });
 });

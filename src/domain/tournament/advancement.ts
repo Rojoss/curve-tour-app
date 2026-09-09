@@ -1,9 +1,11 @@
 import {
+  fairPoints,
   getUnitScore,
   groupByScore,
   orderRoomByScore,
   tieResolutionList,
 } from "./scoring";
+import { rosterKeys } from "./roster";
 import type {
   TournamentRound,
   TournamentStanding,
@@ -175,4 +177,151 @@ export function orderScoredRoom(
   state: Pick<TournamentState, "tieResolutions">,
 ): ScoredUnit[] {
   return orderRoomByScore(scored, roundIndex, room, state);
+}
+
+interface StandingAccumulator {
+  name: string;
+  rounds: Array<{ fp: number; score: number }>;
+}
+
+function materializeStandings(
+  entries: StandingAccumulator[],
+): TournamentStanding[] {
+  return entries
+    .map((entry) => ({
+      name: entry.name,
+      totalFP: entry.rounds.length
+        ? entry.rounds.reduce((total, round) => total + round.fp, 0)
+        : null,
+      totalScore: entry.rounds.reduce(
+        (total, round) => total + round.score,
+        0,
+      ),
+      played: entry.rounds.length,
+    }))
+    .sort((first, second) => {
+      if (first.totalFP === null && second.totalFP === null) return 0;
+      if (first.totalFP === null) return 1;
+      if (second.totalFP === null) return -1;
+      return first.totalFP - second.totalFP;
+    });
+}
+
+export function computeQualificationStandings(
+  state: TournamentState,
+): TournamentStanding[] {
+  const accumulators = new Map<string, StandingAccumulator>(
+    rosterKeys(state.players).map((name) => [name, { name, rounds: [] }]),
+  );
+  for (const [roundIndex, round] of state.rounds.entries()) {
+    if (!(round.isQual || round.isSwiss)) continue;
+    for (let room = 1; room <= round.rooms.length; room += 1) {
+      const assignments = (state.assignments[roundIndex] ?? []).filter(
+        (assignment) => assignment.room === room,
+      );
+      const scored = assignments
+        .map((assignment, position) => ({
+          name: assignment.name,
+          score: getUnitScore(state, roundIndex, room, position, null),
+        }))
+        .filter((entry): entry is ScoredUnit => entry.score !== null);
+      for (const [index, entry] of orderRoomByScore(
+        scored,
+        roundIndex,
+        room,
+        state,
+      ).entries()) {
+        accumulators.get(entry.name)?.rounds.push({
+          fp: fairPoints(index + 1, entry.score),
+          score: entry.score,
+        });
+      }
+    }
+  }
+  return materializeStandings([...accumulators.values()]);
+}
+
+export function computeGroupStandings(
+  state: TournamentState,
+): Record<string, TournamentStanding[]> {
+  const byGroup = new Map<
+    string,
+    Map<string, StandingAccumulator>
+  >();
+  for (const group of state.groups) {
+    byGroup.set(
+      group.label,
+      new Map(
+        group.members.map((name) => [name, { name, rounds: [] }]),
+      ),
+    );
+  }
+
+  for (const [roundIndex, round] of state.rounds.entries()) {
+    if (!round.isGroupStage) continue;
+    for (let room = 1; room <= round.rooms.length; room += 1) {
+      const groupLabel = round.roomGroups?.[room - 1];
+      if (!groupLabel) continue;
+      const assignments = (state.assignments[roundIndex] ?? []).filter(
+        (assignment) => assignment.room === room,
+      );
+      const scored = assignments
+        .map((assignment, position) => ({
+          name: assignment.name,
+          score: getUnitScore(state, roundIndex, room, position, null),
+        }))
+        .filter((entry): entry is ScoredUnit => entry.score !== null);
+      for (const [index, entry] of orderRoomByScore(
+        scored,
+        roundIndex,
+        room,
+        state,
+      ).entries()) {
+        byGroup.get(groupLabel)?.get(entry.name)?.rounds.push({
+          fp: fairPoints(index + 1, entry.score),
+          score: entry.score,
+        });
+      }
+    }
+  }
+
+  return Object.fromEntries(
+    [...byGroup].map(([label, entries]) => [
+      label,
+      materializeStandings([...entries.values()]),
+    ]),
+  );
+}
+
+export function computeGroupStageAdvancement(state: TournamentState): {
+  advancing: Array<{ name: string; isLucky: false }>;
+  luckyNames: null;
+  groupStandings: Record<string, TournamentStanding[]>;
+} {
+  const groupStandings = computeGroupStandings(state);
+  const stateWithStandings = { ...state, groupStandings };
+  const qualifiersPerGroup = state.cfg.qualifiersPerGroup ?? 0;
+  const perGroup = state.groups.map((group) =>
+    applyGroupCutoffOrder(
+      group.label,
+      (groupStandings[group.label] ?? []).filter(
+        (entry) => entry.totalFP !== null,
+      ),
+      stateWithStandings,
+    ).slice(0, qualifiersPerGroup),
+  );
+  const advancing: Array<{ name: string; isLucky: false }> = [];
+  for (let tier = 0; tier < qualifiersPerGroup; tier += 1) {
+    const finishers = perGroup
+      .map((qualifiers) => qualifiers[tier])
+      .filter((entry): entry is TournamentStanding => Boolean(entry))
+      .sort(
+        (first, second) =>
+          (first.totalFP as number) - (second.totalFP as number),
+      );
+    for (const finisher of finishers) {
+      advancing.push({ name: finisher.name, isLucky: false });
+    }
+  }
+  return { advancing, luckyNames: null, groupStandings };
 }

@@ -69,6 +69,8 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Per-room tie detection and ordering, including old string and current
   array resolution values.
 - [x] Qualification and Group Stage cutoff detection and independent ordering.
+- [x] Cumulative Qualification/Swiss and per-group Fair Points standings,
+  including qualifier seeding by finish tier across groups.
 - [ ] Multiple byes and pooling bye rotation.
 - [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
 - [ ] Same-group avoidance entering the bracket.
