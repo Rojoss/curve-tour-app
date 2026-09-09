@@ -83,6 +83,10 @@ assignments, byes, pending seeds, and relevant validation text.
 - [ ] Multi-game Semis/Final totals and incomplete-game behavior after the known
   tab defect is explicitly resolved or preserved.
 - [ ] Grand Final race completion for both target sides.
+- [x] Pure Grand Final race counting with a tied game, winner-side completion,
+  and the undecided open-next-game condition.
+- [x] Fixed multi-game Final totals, completeness, next-game selection, and
+  cumulative ordering independent of the known legacy tab defect.
 - [ ] Final rankings for finalist, eliminated, bye, tie-break, and team cases.
 
 ## Persistence and archives

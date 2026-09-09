@@ -47,7 +47,9 @@
    - [x] Ordinary and double-elimination room advancement selection, including
      resolved ordering and cross-room lucky losers.
    - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
-   - [ ] Grand Final race state, completion, and rankings.
+   - [x] Fixed-game Final progress and Grand Final race calculation/open-next
+     decision.
+   - [ ] Grand Final state-transition integration and tournament rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.
 7. [ ] Roster management, preview, and running Admin UI.

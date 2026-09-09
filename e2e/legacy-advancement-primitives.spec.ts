@@ -331,3 +331,95 @@ test("characterizes seeding, bye rotation, and Swiss rematch avoidance", async (
     poolingByeCounts: { B: 1, C: 1 },
   });
 });
+
+test("characterizes Grand Final races and fixed-game Finals progress", async ({
+  page,
+}) => {
+  const actual = await page.evaluate(() => {
+    const legacy = window as unknown as Record<string, any>;
+    const grandFinal = {
+      roundNum: 1, players: 2, rooms: [2], byeCount: 0,
+      isQual: false, isNoElim: false, isSemis: false, isFinal: true,
+      advPerRoom: 1, advTotal: 1, luckyCount: 0, numGames: 4,
+      bracket: "grand-final", wbFinalistName: "WB",
+    };
+    const raceState = {
+      gameFormat: "ffa-individual",
+      rounds: [grandFinal],
+      assignments: [[{ name: "WB", room: 1 }, { name: "LB", room: 1 }]],
+      gamemodeConfig: { grandFinalWbTarget: 2, grandFinalLbTarget: 3 },
+      finalScores: {
+        "game1-WB": 10, "game1-LB": 5,
+        "game2-WB": 7, "game2-LB": 7,
+        "game3-WB": 4, "game3-LB": 9,
+        "game4-WB": 8, "game4-LB": 6,
+      },
+      scores: {}, players: ["WB", "LB"], reserves: [], defenderChanges: {},
+    };
+    const oneGame = { ...grandFinal, numGames: 1 };
+    const undecided = {
+      ...raceState,
+      rounds: [oneGame],
+      finalScores: { "game1-WB": 10, "game1-LB": 5 },
+      gamemodeConfig: { grandFinalWbTarget: 2, grandFinalLbTarget: 3 },
+    };
+    const plainFinal = {
+      ...grandFinal,
+      bracket: undefined,
+      wbFinalistName: undefined,
+      numGames: 2,
+    };
+    const plainState = {
+      ...raceState,
+      rounds: [plainFinal],
+      assignments: [[{ name: "A", room: 1 }, { name: "B", room: 1 }]],
+      players: ["A", "B"],
+      finalScores: {
+        "game1-A": 10, "game2-A": 20,
+        "game1-B": 25, "game2-B": 15,
+      },
+    };
+    return {
+      race: legacy.computeGrandFinalRaceState(raceState, 0, grandFinal),
+      raceProgress: legacy.finalsProgressState(raceState, 0, grandFinal),
+      undecided: legacy.computeGrandFinalRaceState(undecided, 0, oneGame),
+      plain: legacy.finalsProgressState(plainState, 0, plainFinal),
+      incomplete: legacy.finalsProgressState(
+        { ...plainState, finalScores: { ...plainState.finalScores, "game2-B": null } },
+        0,
+        plainFinal,
+      ),
+    };
+  });
+
+  expect(actual.race).toEqual({
+    wbName: "WB", lbName: "LB", wbWins: 2, lbWins: 1,
+    wbTarget: 2, lbTarget: 3, gamesPlayed: 4,
+    decided: true, winnerName: "WB",
+  });
+  expect(actual.raceProgress).toMatchObject({
+    isGrandFinal: true,
+    complete: true,
+    order: ["WB", "LB"],
+    gameComplete: [true, true, true, true],
+    nextGame: null,
+  });
+  expect(actual.undecided).toMatchObject({
+    wbWins: 1, lbWins: 0, gamesPlayed: 1, decided: false, winnerName: null,
+  });
+  expect(actual.plain).toMatchObject({
+    isGrandFinal: false,
+    complete: true,
+    order: ["B", "A"],
+    gameComplete: [true, true],
+    units: [
+      { name: "A", perGame: [10, 20], total: 30, wins: 0 },
+      { name: "B", perGame: [25, 15], total: 40, wins: 0 },
+    ],
+  });
+  expect(actual.incomplete).toMatchObject({
+    complete: false,
+    nextGame: 2,
+    order: ["A", "B"],
+  });
+});
