@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   addReserveUnit,
   addWalkUpIndividual,
@@ -33,7 +33,17 @@ import {
   type TournamentTeam,
 } from "../../domain/tournament";
 import { useTournamentApp } from "../tournament/TournamentProvider";
-import { saveBracketFollow } from "../../lib/persistence";
+import {
+  findLatestArchiveEntryForTournament,
+  loadArchiveIndex,
+  saveBracketFollow,
+  writeArchiveSnapshot,
+  type ArchiveSummary,
+} from "../../lib/persistence";
+
+type AdminPrompt =
+  | { kind: "save"; sameTournament?: ArchiveSummary; titleCollision?: ArchiveSummary }
+  | { kind: "reset" };
 
 function phaseLabel(state: TournamentState) {
   const round = state.rounds[state.curRound];
@@ -415,15 +425,72 @@ export function RunningAdmin() {
   const state = app.state;
   const round = state.rounds[state.curRound];
   const [message, setMessage] = useState("");
+  const [archiveStatus, setArchiveStatus] = useState("");
+  const [prompt, setPrompt] = useState<AdminPrompt | null>(null);
+  useEffect(() => {
+    const showStatus = (event: Event) => setArchiveStatus((event as CustomEvent<string>).detail);
+    window.addEventListener("curve-tour:archive-status", showStatus);
+    return () => window.removeEventListener("curve-tour:archive-status", showStatus);
+  }, []);
   const pendingTies = useMemo(() => Object.entries(getAllTies(state, state.curRound)).some(([key, tie]) => !isTieResolved(key, tie, state)), [state]);
   if (!round) return <div className="msg msg-err">The saved tournament has no current round.</div>;
   const assignments = state.assignments[state.curRound] ?? [];
   const last = state.curRound >= state.rounds.length - 1 || round.bracket === "grand-final";
+
+  function mintArchiveId(index = loadArchiveIndex(window.localStorage)) {
+    let id = String(app.runtime.clock.now());
+    while (index.some((entry) => String(entry.id) === id) || window.localStorage.getItem(`curveFFA_archive_${id}`) !== null) {
+      id = String(Number(id) + 1);
+    }
+    return id;
+  }
+
+  function saveArchive(id: string, keepAnnotations: boolean, status = "Tournament saved to archive.") {
+    writeArchiveSnapshot({
+      storage: window.localStorage,
+      state,
+      id,
+      dateSaved: new Date(app.runtime.clock.now()).toISOString(),
+      keepAnnotations,
+    });
+    app.updateState((current) => ({ ...current, needsSave: false }));
+    setArchiveStatus(status);
+    setPrompt(null);
+  }
+
+  function saveSilently() {
+    const index = loadArchiveIndex(window.localStorage);
+    const existing = findLatestArchiveEntryForTournament(index, state.tournamentId);
+    saveArchive(existing?.id ?? mintArchiveId(index), Boolean(existing));
+  }
+
+  function requestArchiveSave() {
+    const index = loadArchiveIndex(window.localStorage);
+    const title = state.title.trim() || "Unnamed Tournament";
+    const sameTournament = findLatestArchiveEntryForTournament(index, state.tournamentId);
+    if (sameTournament) {
+      setPrompt({ kind: "save", sameTournament });
+      return;
+    }
+    const titleCollision = index.find((entry) => entry.title === title);
+    if (titleCollision) {
+      setPrompt({ kind: "save", titleCollision });
+      return;
+    }
+    saveArchive(mintArchiveId(index), false);
+  }
+
+  function resetNow() {
+    saveBracketFollow(window.localStorage, null);
+    app.updateState(resetTournamentState(state));
+    setPrompt(null);
+  }
   return (
     <div id="panel-running">
       <div className="card running-title-card"><div className="card-title">Tournament running</div><div className="field"><label htmlFor="running-title">Tournament name</label><input id="running-title" type="text" value={state.title} placeholder="Unnamed Tournament" onChange={(event) => app.updateState((current) => ({ ...current, title: event.target.value, needsSave: true }))} /></div></div>
       <TieBanners state={state} />
       {message ? <div className="msg msg-err">{message}</div> : null}
+      {archiveStatus ? <div className="msg msg-ok" id="archive-save-status">{archiveStatus}</div> : null}
       <div className="stats"><div><span>Round</span><strong>{phaseLabel(state)}</strong></div><div><span>{getGameFormat(state.gameFormat)?.unitLabelPlural}</span><strong>{assignments.length}</strong></div><div><span>Rooms</span><strong>{round.rooms.length}</strong></div><div><span>Advancing</span><strong>{round.isNoElim ? "All" : round.isFinal ? "—" : `${round.advTotal}${round.luckyCount ? ` + ${round.luckyCount} LL` : ""}`}</strong></div></div>
       <div className="card"><div className="card-title">Tournament progress</div><div className="timeline">{state.rounds.map((entry, index) => <div className="tl-item" key={index}><div className={`tl-dot ${index < state.curRound ? "done" : index === state.curRound ? "current" : ""}`}>{index < state.curRound ? "✓" : entry.isFinal ? "🏆" : entry.isSemis ? "S" : entry.roundNum}</div><div className="tl-label">{entry.isFinal ? "Final" : entry.isSemis ? "Semis" : `R${entry.roundNum}`}</div></div>)}</div></div>
       <ReservePanel state={state} />
@@ -438,14 +505,32 @@ export function RunningAdmin() {
           else if (result.status === "blocked") setMessage(result.message);
         }}>Next Round →</button> : null}
         {state.curRound > 0 ? <button className="btn btn-secondary" onClick={() => app.updateState((current) => ({ ...current, curRound: current.curRound - 1 }))}>← Previous</button> : null}
-        <button className="btn btn-purple" onClick={() => setMessage("Archive saving is available in the Archive migration slice.")}>💾 Save to Archive</button>
+        <button className="btn btn-purple" onClick={requestArchiveSave}>💾 Save to Archive</button>
         <button className="btn btn-secondary" onClick={() => {
-          if (window.confirm("Reset the full tournament? All scores will be lost.")) {
-            saveBracketFollow(window.localStorage, null);
-            app.updateState(resetTournamentState(state));
-          }
+          if (state.needsSave) setPrompt({ kind: "reset" });
+          else if (window.confirm("Reset the full tournament? All scores will be lost.")) resetNow();
         }}>↺ Reset</button>
       </div>
+      {prompt?.kind === "save" ? <div className="modal-overlay" role="presentation"><div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="archive-save-title">
+        <div className="modal-title" id="archive-save-title">{prompt.sameTournament ? "Tournament already archived" : "Title already used"}</div>
+        <p>{prompt.sameTournament
+          ? `A tournament named "${state.title.trim() || "Unnamed Tournament"}" already exists. Overwrite, save as a new entry, or cancel?`
+          : `A different archived tournament is also named "${state.title.trim() || "Unnamed Tournament"}". Save this as a new entry, or cancel to rename it first?`}</p>
+        <div className="modal-btns">
+          {prompt.sameTournament ? <button className="btn btn-danger" onClick={() => saveArchive(prompt.sameTournament!.id, true)}>Overwrite existing</button> : null}
+          <button className="btn btn-secondary" onClick={() => saveArchive(mintArchiveId(), false)}>Save as new entry</button>
+          <button className="btn btn-secondary" onClick={() => setPrompt(null)}>Cancel</button>
+        </div>
+      </div></div> : null}
+      {prompt?.kind === "reset" ? <div className="modal-overlay" role="presentation"><div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+        <div className="modal-title" id="reset-title">Unsaved tournament</div>
+        <p>This tournament has changes that are not in the archive. Save a snapshot before resetting, discard the changes, or cancel?</p>
+        <div className="modal-btns">
+          <button className="btn btn-success" onClick={() => { saveSilently(); resetNow(); }}>Save &amp; reset</button>
+          <button className="btn btn-danger" onClick={resetNow}>Reset without saving</button>
+          <button className="btn btn-secondary" onClick={() => setPrompt(null)}>Cancel</button>
+        </div>
+      </div></div> : null}
     </div>
   );
 }

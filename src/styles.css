@@ -195,7 +195,24 @@ input[type="number"].score-inp { width: 90px; padding: 5px 7px; font: 700 18px v
 .modal-overlay { display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 1000; padding: 20px; background: #000b; }
 .modal-box { width: min(440px, 100%); border: 1px solid var(--border); border-radius: 10px; padding: 22px; background: var(--surface); box-shadow: 0 20px 80px #000a; }
 .modal-title { margin-bottom: 14px; color: var(--cyan); font: 700 20px var(--font-d); }
-.modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.modal-btns { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; }
+.archive-toolbar { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.archive-toolbar h2 { margin: 0 0 3px; color: var(--cyan); font: 700 24px var(--font-d); }
+.archive-toolbar .btn-row { margin-top: 0; }
+.archive-list { display: grid; gap: 9px; }
+.archive-row { display: flex; width: 100%; flex-direction: column; align-items: flex-start; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 13px 16px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
+.archive-row:hover, .archive-row:focus-visible { border-color: var(--cyan); background: var(--cyan-dim); }
+.archive-row-title { font: 700 17px var(--font-d); }
+.archive-row-meta { color: var(--muted); font-size: 11px; }
+.archive-detail-actions { margin-bottom: 14px; }
+.archive-notes { margin-top: 16px; }
+.archive-note { align-items: flex-start; flex-direction: column; margin-bottom: 8px; white-space: pre-wrap; }
+.archive-note-head { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; gap: 10px; font-size: 13px; }
+.archive-note small, .archive-note-empty { color: var(--muted); font-size: 10px; }
+.archive-note-add { display: flex; align-items: flex-start; gap: 8px; }
+.archive-note-add textarea { min-height: 76px; flex: 1; resize: vertical; }
+.archive-bracket .bracket-round-hdr { cursor: default; }
 @media (max-width: 700px) {
   header { padding: 0 14px; }
   .logo { font-size: 16px; letter-spacing: 2px; }
@@ -205,5 +222,7 @@ input[type="number"].score-inp { width: 90px; padding: 5px 7px; font: 700 18px v
   main { padding: 14px 12px; }
   .g2 { grid-template-columns: 1fr; }
   .card { padding: 15px; }
+  .archive-note-add { flex-direction: column; }
+  .archive-note-add textarea { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

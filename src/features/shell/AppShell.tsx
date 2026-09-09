@@ -6,6 +6,7 @@ import { SetupView } from "../admin/SetupView";
 import { RunningAdmin } from "../admin/RunningAdmin";
 import { RankingsView } from "../rankings/RankingsView";
 import { ScoreboardView } from "../scoreboard/ScoreboardView";
+import { ArchiveView } from "../archive/ArchiveView";
 import { useTournamentApp } from "../tournament/TournamentProvider";
 
 const TABS: Array<{ key: ActiveTab; label: string }> = [
@@ -15,10 +16,6 @@ const TABS: Array<{ key: ActiveTab; label: string }> = [
   { key: "rankings", label: "🏆 Rankings" },
   { key: "archive", label: "🗄 Archive" },
 ];
-
-function EmptyView({ children }: { children: React.ReactNode }) {
-  return <div className="msg msg-info">{children}</div>;
-}
 
 export function AppShell() {
   const app = useTournamentApp();
@@ -82,7 +79,7 @@ export function AppShell() {
           <section id="view-rankings"><RankingsView /></section>
         ) : null}
         {app.activeTab === "archive" ? (
-          <section id="view-archive"><EmptyView>No tournaments archived yet — completed tournaments saved from Admin will show up here, or import a previously exported file.</EmptyView></section>
+          <section id="view-archive"><ArchiveView /></section>
         ) : null}
       </main>
       <AdminPasswordModal

@@ -57,7 +57,13 @@
 7. [x] Roster management, preview, and running Admin UI.
 8. [x] Scoreboard and Rankings UI.
 9. [x] Bracket UI, follow/collapse behavior, and direct score entry.
-10. [ ] Archive UI, JSON transfer, annotations, and PNG downloads.
+10. [x] Archive UI, JSON transfer, annotations, and PNG downloads.
+    - [x] Legacy-compatible index/entry storage, tournament-ID matching,
+      annotation-preserving overwrite, save-as-new, and title-collision flows.
+    - [x] One-time completed-Final auto-save and unsaved-reset protection.
+    - [x] Read-only archive Rankings/Bracket detail, immediate annotations,
+      confirmed deletion, single/full JSON transfer, and 25 MiB validation.
+    - [x] Live/archive Rankings PNG downloads and desktop/390 px archive checks.
 11. [ ] Firebase viewer/writer transport and concurrent merge behavior.
 12. [ ] Full parity matrix, deployment preview, rollback rehearsal, and cutover.
 

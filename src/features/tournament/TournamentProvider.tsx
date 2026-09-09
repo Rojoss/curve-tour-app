@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  computeRankings,
   createEmptyTournamentState,
   createLegacySetupFixture,
   createTournamentRuntime,
@@ -18,10 +19,13 @@ import {
 } from "../../domain/tournament";
 import {
   clearAdminSession,
+  findLatestArchiveEntryForTournament,
   loadLiveEnvelope,
+  loadArchiveIndex,
   readAdminSession,
   saveAdminSession,
   saveLiveEnvelope,
+  writeArchiveSnapshot,
 } from "../../lib/persistence";
 
 export interface TournamentAppContext {
@@ -106,6 +110,33 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [isViewer],
   );
+
+  useEffect(() => {
+    if (!hydrated || isViewer || state.autoSaved) return;
+    const round = state.rounds[state.curRound];
+    if (!round?.isFinal || !computeRankings(state)?.finalComplete) return;
+    try {
+      const index = loadArchiveIndex(window.localStorage);
+      const existing = findLatestArchiveEntryForTournament(index, state.tournamentId);
+      let id = existing?.id ?? String(runtime.clock.now());
+      while (!existing && (index.some((entry) => String(entry.id) === id) || window.localStorage.getItem(`curveFFA_archive_${id}`) !== null)) {
+        id = String(Number(id) + 1);
+      }
+      writeArchiveSnapshot({
+        storage: window.localStorage,
+        state,
+        id,
+        dateSaved: new Date(runtime.clock.now()).toISOString(),
+        keepAnnotations: Boolean(existing),
+      });
+      const next = { ...state, autoSaved: true, needsSave: false };
+      setState(next);
+      persist(next, setup, activeTab);
+      window.dispatchEvent(new CustomEvent("curve-tour:archive-status", { detail: "Tournament archived automatically." }));
+    } catch (error) {
+      console.warn("Could not automatically archive completed tournament", error);
+    }
+  }, [activeTab, hydrated, isViewer, persist, runtime, setup, state]);
 
   const setActiveTab = useCallback(
     (tab: ActiveTab) => {

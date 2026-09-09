@@ -172,3 +172,8 @@ export function BracketView() {
     return <div className={`bracket-round-col ${collapsed ? "is-collapsed" : ""} ${roundIndex === app.state.curRound ? "current-col" : ""}`} data-ri={roundIndex} key={roundIndex}><button className={`bracket-round-hdr collapsible ${collapsed ? "is-collapsed" : ""} ${roundIndex === app.state.curRound ? "current-hdr" : ""} ${labels[roundIndex]?.accent ? `${labels[roundIndex].accent}-hdr` : ""} ${containsFollow ? "has-followed" : ""}`} onClick={() => setCollapse((current) => ({ ...current, [roundIndex]: !collapsed }))}><span className="bracket-collapse-chevron">▸</span>{labels[roundIndex]?.label}</button>{!collapsed ? <div className="bracket-round-body"><RoundBody state={app.state} roundIndex={roundIndex} editable={editable} followKey={followKey} /></div> : null}</div>;
   })}</div></div>;
 }
+
+export function ArchivedBracket({ state }: { state: TournamentState }) {
+  const labels = bracketRoundLabels(state);
+  return <div className="bracket-scroll archive-bracket">{state.rounds.map((_, roundIndex) => <div className="bracket-round-col" data-ri={roundIndex} key={roundIndex}><div className={`bracket-round-hdr ${labels[roundIndex]?.accent ? `${labels[roundIndex].accent}-hdr` : ""}`}>{labels[roundIndex]?.label}</div><div className="bracket-round-body"><RoundBody state={state} roundIndex={roundIndex} editable={false} followKey={null} /></div></div>)}</div>;
+}

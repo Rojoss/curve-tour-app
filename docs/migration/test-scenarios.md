@@ -105,13 +105,13 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Pre-pooling `setup.qual` fallback.
 - [x] Missing tournament-ID fallback.
 - [x] Historical team-roster normalization and null slots.
-- [ ] Archive create, overwrite, save-as-new, title collision, and annotation
+- [x] Archive create, overwrite, save-as-new, title collision, and annotation
   preservation.
-- [ ] Auto-save exactly once at completion.
-- [ ] Single and bundle export/import round trips.
-- [ ] Valid, invalid, oversized, duplicate-ID, and duplicate-tournament imports.
-- [ ] Archive deletion and annotation deletion confirmations.
-- [ ] Live and archived rankings PNG downloads have valid dimensions/content.
+- [x] Auto-save exactly once at completion.
+- [x] Single and bundle export/import round trips.
+- [x] Valid, invalid, oversized, duplicate-ID, and duplicate-tournament imports.
+- [x] Archive deletion and annotation deletion confirmations.
+- [x] Live and archived rankings PNG downloads have valid dimensions/content.
 
 ## Synchronization
 
