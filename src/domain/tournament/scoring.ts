@@ -218,3 +218,30 @@ export function tieResolutionList(
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
+
+export function orderRoomByScore<T extends { name: string; score: number }>(
+  scored: T[],
+  roundIndex: number,
+  room: number,
+  state: Pick<TournamentState, "tieResolutions">,
+): T[] {
+  const sorted = [...scored].sort((first, second) => second.score - first.score);
+  const ordered: T[] = [];
+  for (const cluster of groupByScore(sorted)) {
+    if (cluster.length < 2) {
+      ordered.push(cluster[0]);
+      continue;
+    }
+    const key = `r${roundIndex}-rm${room}-s${cluster[0].score}`;
+    const resolved = tieResolutionList(state, key);
+    const byName = new Map(cluster.map((entry) => [entry.name, entry]));
+    const remaining = cluster
+      .map((entry) => entry.name)
+      .filter((name) => !resolved.includes(name));
+    for (const name of [...resolved, ...remaining]) {
+      const entry = byName.get(name);
+      if (entry) ordered.push(entry);
+    }
+  }
+  return ordered;
+}

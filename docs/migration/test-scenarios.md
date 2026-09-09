@@ -65,6 +65,10 @@ assignments, byes, pending seeds, and relevant validation text.
 - [ ] Ordinary tie resolution and invalidation after score edit.
 - [ ] Qualification cutoff tie and Group Stage cutoff tie.
 - [ ] Lucky-loser calculation and display.
+- [x] Pure lucky-loser candidate ratios/selection and zero-total exclusion.
+- [x] Per-room tie detection and ordering, including old string and current
+  array resolution values.
+- [x] Qualification and Group Stage cutoff detection and independent ordering.
 - [ ] Multiple byes and pooling bye rotation.
 - [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
 - [ ] Same-group avoidance entering the bracket.

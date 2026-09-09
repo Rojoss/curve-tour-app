@@ -39,6 +39,11 @@
    - [x] Race-style head-to-head double-elimination topology.
    - [x] Shared-Final FFA/team double-elimination topology.
 4. [ ] Advancement, ties, byes, double-elimination routing, and rankings.
+   - [x] Room tie detection/order, legacy resolution normalization,
+     qualification/group cutoff ties, and lucky-loser selection primitives.
+   - [ ] Cumulative Qualification, Swiss, and Group Stage standings.
+   - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
+   - [ ] Grand Final race state, completion, and rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.
 7. [ ] Roster management, preview, and running Admin UI.
