@@ -31,7 +31,7 @@
 ## Migration slices
 
 1. [x] Typed state model, clocks/random/ID injection, and fixture utilities.
-2. [ ] Pure format, room-distribution, scoring, and roster primitives.
+2. [x] Pure format, room-distribution, scoring, and roster primitives.
 3. [ ] Pooling and bracket schedule generation.
 4. [ ] Advancement, ties, byes, double-elimination routing, and rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.

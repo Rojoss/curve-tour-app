@@ -13,6 +13,11 @@ export type GameFormatKey =
   | "last-man-standing"
   | "individual-1v1";
 
+export type ImplementedGameFormatKey = Exclude<
+  GameFormatKey,
+  "last-man-standing"
+>;
+
 export type ScheduleLogicKey =
   | "single-elimination"
   | "double-elimination"
@@ -48,6 +53,17 @@ export interface RoomSize {
   min: number;
   max: number;
   ideal: number;
+}
+
+export interface GameFormatDefinition {
+  key: ImplementedGameFormatKey;
+  label: string;
+  unitLabel: "Player" | "Team";
+  unitLabelPlural: "Players" | "Teams";
+  teamSize?: number;
+  defaultRoomSize?: RoomSize;
+  idealRoomSize?: number;
+  supportedOddCountStrategies?: OddCountStrategyKey[];
 }
 
 export interface GroupStageMatch {
@@ -146,7 +162,7 @@ export interface TournamentState {
   rounds: TournamentRound[];
   curRound: number;
   scores: Record<string, number | null>;
-  finalScores: Record<string, number | "">;
+  finalScores: Record<string, number | "" | null>;
   assignments: RoundAssignment[][];
   luckyLosers: string[][];
   byes: string[][];

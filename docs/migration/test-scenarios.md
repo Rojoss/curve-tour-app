@@ -26,7 +26,7 @@ boundaries. Fix random seed, clock, and ID generator.
 - [ ] 3v3v3 × both compatible schedule logics × every pooling phase.
 - [ ] 3v3 × single/race-double × none/bye/flex × every pooling phase.
 - [ ] 1v1 × single/race-double × none/bye × every pooling phase.
-- [ ] Physical room-cap validation at 10 and rejection above 10.
+- [x] Physical room-cap validation at 10 and rejection above 10.
 - [ ] Semis/Final sizes and 1–4 game combinations.
 - [ ] WB/LB target races and shared-Final LB qualifier boundaries.
 
@@ -49,9 +49,9 @@ assignments, byes, pending seeds, and relevant validation text.
 
 ## Scoring and progression
 
-- [ ] Empty versus zero scores and negative/large values.
-- [ ] Member sum and defender-only derived team scores.
-- [ ] Fair Points ordering and stable tie clusters.
+- [x] Empty versus zero scores and negative/large values.
+- [x] Member sum and defender-only derived team scores.
+- [x] Fair Points ordering and stable tie clusters.
 - [ ] Ordinary tie resolution and invalidation after score edit.
 - [ ] Qualification cutoff tie and Group Stage cutoff tie.
 - [ ] Lucky-loser calculation and display.
