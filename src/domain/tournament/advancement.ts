@@ -325,3 +325,127 @@ export function computeGroupStageAdvancement(state: TournamentState): {
   }
   return { advancing, luckyNames: null, groupStandings };
 }
+
+export interface AdvancementResult {
+  advancing: Array<{ name: string; isLucky: boolean }>;
+  luckyNames: string[] | null;
+  qualTable?: TournamentStanding[];
+  groupStandings?: Record<string, TournamentStanding[]>;
+}
+
+export function roomBasedComputeAdvancement(
+  state: TournamentState,
+  roundIndex: number,
+): AdvancementResult {
+  const round = state.rounds[roundIndex];
+  const nextRound = state.rounds[roundIndex + 1];
+  const isLastStandingsRound =
+    state.cfg.poolingPhase !== "none" &&
+    Boolean(round.isQual || round.isSwiss) &&
+    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss));
+  if (isLastStandingsRound) {
+    const qualTable = computeQualificationStandings(state);
+    const ordered = applyQualCutoffOrder(
+      qualTable.filter((entry) => entry.totalFP !== null),
+      { ...state, qualTable },
+    );
+    return {
+      advancing: ordered
+        .slice(0, state.cfg.qualAdv)
+        .map((entry) => ({ name: entry.name, isLucky: false })),
+      luckyNames: null,
+      qualTable,
+    };
+  }
+
+  if (
+    round.isGroupStage &&
+    !(nextRound && nextRound.isGroupStage)
+  ) {
+    return computeGroupStageAdvancement(state);
+  }
+
+  const direct: Array<{ name: string; isLucky: boolean }> = [];
+  const luckyPool: LuckyLoserCandidate[] = [];
+  const assignments = state.assignments[roundIndex] ?? [];
+  for (let room = 1; room <= round.rooms.length; room += 1) {
+    const players = assignments.filter((assignment) => assignment.room === room);
+    const advancingFromRoom = round.isNoElim
+      ? players.length
+      : (round.advPerRoom ?? 0);
+    const scored = orderRoomByScore(
+      players.map((player, position) => ({
+        name: player.name,
+        score: getUnitScore(state, roundIndex, room, position, 0) ?? 0,
+      })),
+      roundIndex,
+      room,
+      state,
+    );
+    for (const entry of scored.slice(0, advancingFromRoom)) {
+      direct.push({ name: entry.name, isLucky: false });
+    }
+    if (
+      !round.isNoElim &&
+      round.luckyCount > 0 &&
+      scored.length > (round.advPerRoom ?? 0)
+    ) {
+      const candidate = luckyLoserCandidate(
+        scored,
+        round.advPerRoom ?? 0,
+      );
+      if (candidate) luckyPool.push(candidate);
+    }
+  }
+  const luckyNames = pickLuckyLosers(luckyPool, round.luckyCount);
+  return {
+    advancing: [
+      ...direct,
+      ...luckyNames.map((name) => ({ name, isLucky: true })),
+    ],
+    luckyNames,
+  };
+}
+
+export interface DoubleEliminationAdvancementResult {
+  winners: Array<{ name: string }>;
+  losers: Array<{ name: string }>;
+  luckyNames: string[];
+}
+
+export function doubleEliminationComputeAdvancement(
+  state: TournamentState,
+  roundIndex: number,
+): DoubleEliminationAdvancementResult {
+  const round = state.rounds[roundIndex];
+  const assignments = state.assignments[roundIndex] ?? [];
+  const direct: Array<{ name: string }> = [];
+  const losers: Array<{ name: string }> = [];
+  const luckyPool: LuckyLoserCandidate[] = [];
+  const advancingFromRoom = round.advPerRoom ?? 0;
+  for (let room = 1; room <= round.rooms.length; room += 1) {
+    const players = assignments.filter((assignment) => assignment.room === room);
+    const scored = orderRoomByScore(
+      players.map((player, position) => ({
+        name: player.name,
+        score: getUnitScore(state, roundIndex, room, position, 0) ?? 0,
+      })),
+      roundIndex,
+      room,
+      state,
+    );
+    direct.push(...scored.slice(0, advancingFromRoom).map(({ name }) => ({ name })));
+    losers.push(...scored.slice(advancingFromRoom).map(({ name }) => ({ name })));
+    if (round.luckyCount > 0 && scored.length > advancingFromRoom) {
+      const candidate = luckyLoserCandidate(scored, advancingFromRoom);
+      if (candidate) luckyPool.push(candidate);
+    }
+  }
+  const luckyNames = pickLuckyLosers(luckyPool, round.luckyCount);
+  const luckySet = new Set(luckyNames);
+  return {
+    winners: [...direct, ...luckyNames.map((name) => ({ name }))],
+    losers: losers.filter((entry) => !luckySet.has(entry.name)),
+    luckyNames,
+  };
+}

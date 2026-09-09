@@ -44,6 +44,8 @@
    - [x] Cumulative Qualification, Swiss, and Group Stage standings.
    - [x] Deterministic random/snake seeding, Group Stage collision avoidance,
      pooling-bye rotation, and Swiss fold/rematch handling.
+   - [x] Ordinary and double-elimination room advancement selection, including
+     resolved ordering and cross-room lucky losers.
    - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
    - [ ] Grand Final race state, completion, and rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.

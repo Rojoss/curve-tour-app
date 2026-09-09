@@ -9,10 +9,12 @@ import {
   detectGroupCutoffTie,
   detectQualCutoffTie,
   detectTieBreaks,
+  doubleEliminationComputeAdvancement,
   isTieResolved,
   luckyLoserCandidate,
   orderRoomByScore,
   pickLuckyLosers,
+  roomBasedComputeAdvancement,
   tieResolutionList,
   type TournamentRound,
   type TournamentStanding,
@@ -121,6 +123,24 @@ describe("lucky-loser selection", () => {
         1,
       ),
     ).toBeNull();
+  });
+
+  it("uses the same direct and lucky split for ordinary and double elimination", () => {
+    const tournament = state();
+    expect(roomBasedComputeAdvancement(tournament, 0)).toEqual({
+      advancing: [
+        { name: "A", isLucky: false },
+        { name: "D", isLucky: false },
+        { name: "C", isLucky: true },
+        { name: "E", isLucky: true },
+      ],
+      luckyNames: ["C", "E"],
+    });
+    expect(doubleEliminationComputeAdvancement(tournament, 0)).toEqual({
+      winners: [{ name: "A" }, { name: "D" }, { name: "C" }, { name: "E" }],
+      losers: [{ name: "B" }, { name: "F" }],
+      luckyNames: ["C", "E"],
+    });
   });
 });
 

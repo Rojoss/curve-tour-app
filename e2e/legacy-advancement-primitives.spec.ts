@@ -85,6 +85,16 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
       ),
       candidates: [firstCandidate, secondCandidate],
       picked: legacy.pickLuckyLosers([firstCandidate, secondCandidate], 1),
+      ordinaryAdvancement: legacy.roomBasedComputeAdvancement(
+        0,
+        state.rounds[0],
+        {},
+      ),
+      doubleAdvancement: legacy.doubleEliminationComputeAdvancement(
+        0,
+        state.rounds[0],
+        {},
+      ),
       noCandidate: legacy.luckyLoserCandidate(
         [{ name: "X", score: 0 }, { name: "Y", score: 0 }],
         1,
@@ -116,6 +126,20 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
       { name: "E", pct: 100 / 350 },
     ],
     picked: ["C"],
+    ordinaryAdvancement: {
+      advancing: [
+        { name: "A", isLucky: false },
+        { name: "D", isLucky: false },
+        { name: "C", isLucky: true },
+        { name: "E", isLucky: true },
+      ],
+      luckyNames: ["C", "E"],
+    },
+    doubleAdvancement: {
+      winners: [{ name: "A" }, { name: "D" }, { name: "C" }, { name: "E" }],
+      losers: [{ name: "B" }, { name: "F" }],
+      luckyNames: ["C", "E"],
+    },
     noCandidate: null,
     qualTie: {
       key: "qual-cutoff",
