@@ -94,12 +94,12 @@ assignments, byes, pending seeds, and relevant validation text.
 ## Persistence and archives
 
 - [x] Exact fresh-state envelope keys and setup value types/defaults.
-- [ ] Reload each setup field and active tab.
+- [x] Reload each setup field and active tab.
 - [x] Reload running tournament, scores, title, active tab, and advance afterward.
-- [ ] Viewer proves it never writes `curveFFA_state_v1`.
-- [ ] Pre-pooling `setup.qual` fallback.
-- [ ] Missing tournament-ID fallback.
-- [ ] Historical team-roster normalization and null slots.
+- [x] Viewer proves it never writes `curveFFA_state_v1`.
+- [x] Pre-pooling `setup.qual` fallback.
+- [x] Missing tournament-ID fallback.
+- [x] Historical team-roster normalization and null slots.
 - [ ] Archive create, overwrite, save-as-new, title collision, and annotation
   preservation.
 - [ ] Auto-save exactly once at completion.

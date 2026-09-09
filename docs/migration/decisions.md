@@ -18,6 +18,9 @@
    slice is reached if the correction stays small. Keep their characterization
    tests until then, and document the intentional behavior change when updating
    those tests.
+10. Preserve the legacy omission of `cfg-lb-qualifiers` from the live setup
+    envelope during parity. The generated tournament state remains authoritative,
+    and old/new saves stay mutually readable without adding a protocol field.
 
 ## Decisions required before affected slices
 
@@ -29,10 +32,6 @@
 - Where will the TanStack server build be hosted, and does that platform support
   the chosen Nitro output?
 - Should current user-facing wording be frozen exactly or only semantically?
-- The legacy persistence envelope does not save the `cfg-lb-qualifiers` setup
-  value even though the initial storage inventory claimed it did. Decide in the
-  persistence slice whether this should remain a compatibility quirk or be fixed
-  while continuing to read old envelopes that omit it.
 
 These questions do not block domain-logic and local UI slices, but they do block
 sync, deployment, and final visual acceptance.

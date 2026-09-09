@@ -52,7 +52,7 @@
    - [x] Tournament rankings for active, finalist, ordinary-elimination, and
      double-elimination states.
    - [x] Grand Final and round state-transition integration.
-5. [ ] Browser persistence and backwards-compatible normalization.
+5. [x] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.
 7. [ ] Roster management, preview, and running Admin UI.
 8. [ ] Scoreboard and Rankings UI.
