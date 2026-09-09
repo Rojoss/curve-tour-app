@@ -213,6 +213,12 @@ input[type="number"].score-inp { width: 90px; padding: 5px 7px; font: 700 18px v
 .archive-note-add { display: flex; align-items: flex-start; gap: 8px; }
 .archive-note-add textarea { min-height: 76px; flex: 1; resize: vertical; }
 .archive-bracket .bracket-round-hdr { cursor: default; }
+.sync-link { margin-bottom: 8px; }
+.sync-copy-row { align-items: center; gap: 10px; }
+.sync-copy-row span, .sync-status { font-size: 12px; }
+.sync-status { margin-top: 8px; }
+.sync-stale-banner { margin: 10px auto 0; width: min(1100px, calc(100% - 24px)); }
+.sync-viewer-overlay .modal-box { text-align: center; }
 @media (max-width: 700px) {
   header { padding: 0 14px; }
   .logo { font-size: 16px; letter-spacing: 2px; }

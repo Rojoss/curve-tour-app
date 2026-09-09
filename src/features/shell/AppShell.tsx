@@ -58,6 +58,7 @@ export function AppShell() {
           </button>
         ))}
       </nav>
+      {app.isViewer && app.syncStatus.kind === "stale" ? <div className="msg msg-err sync-stale-banner">⚠ Live connection lost — what you&apos;re seeing may be out of date. Reload to try reconnecting.</div> : null}
       <main data-hydrated={app.hydrated ? "true" : "false"}>
         {app.activeTab === "admin" ? (
           <section id="view-admin">
@@ -82,6 +83,14 @@ export function AppShell() {
           <section id="view-archive"><ArchiveView /></section>
         ) : null}
       </main>
+      {app.isViewer && ["connecting", "waiting", "unavailable"].includes(app.syncStatus.kind) ? <div className="modal-overlay sync-viewer-overlay" role="status"><div className="modal-box">
+        <div className="modal-title">{app.syncStatus.kind === "waiting" ? "Waiting for the tournament to start…" : app.syncStatus.kind === "unavailable" ? "Live sync unavailable" : "Connecting…"}</div>
+        <p>{app.syncStatus.kind === "waiting"
+          ? "This link is valid, but the organiser hasn’t generated a schedule yet. This page updates automatically once they do."
+          : app.syncStatus.kind === "unavailable"
+            ? "The live-sync library couldn’t load — check your connection and reload the page."
+            : "Loading the live tournament."}</p>
+      </div></div> : null}
       <AdminPasswordModal
         open={passwordOpen}
         onCancel={() => setPasswordOpen(false)}

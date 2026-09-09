@@ -117,13 +117,13 @@ assignments, byes, pending seeds, and relevant validation text.
 
 - [x] Local-only setup, generation, scoring, viewer navigation, reload, and
   advancement with Firebase fully blocked.
-- [ ] Null sentinel round trip.
-- [ ] Writer debounce and successful push status.
-- [ ] Viewer waiting, initial state, update, and stale-connection behavior.
-- [ ] Different-field concurrent writer edits merge.
-- [ ] Dirty local score survives an older remote payload.
-- [ ] Same-field edits are last-write-wins.
-- [ ] Listener teardown on reset and tournament change.
+- [x] Null sentinel round trip.
+- [x] Writer debounce and successful push status.
+- [x] Viewer waiting, initial state, update, and stale-connection behavior.
+- [x] Different-field concurrent writer edits merge.
+- [x] Dirty local score survives an older remote payload.
+- [x] Same-field edits are last-write-wins.
+- [x] Listener teardown on reset and tournament change.
 - [manual] Repeat all networked cases using an isolated Firebase test project.
 
 ## Visual baselines

@@ -420,6 +420,35 @@ function Standings({ state }: { state: TournamentState }) {
   return <div className="standings-grid">{tables.map(([label, entries]) => <div className="card" key={label}><div className="card-title">{label}</div><div className="table-scroll"><table><thead><tr><th>Pos</th><th>Player / Team</th><th>Fair Points</th><th>Score</th><th>Played</th></tr></thead><tbody>{entries.map((entry, index) => <tr key={entry.name}><td>{index + 1}</td><td><UnitName state={state} name={entry.name} /></td><td>{entry.totalFP?.toFixed(5) ?? "—"}</td><td>{entry.totalScore}</td><td>{entry.played}</td></tr>)}</tbody></table></div></div>)}</div>;
 }
 
+function LiveSyncCard() {
+  const app = useTournamentApp();
+  const [copied, setCopied] = useState(false);
+  if (!app.state.tournamentId) return null;
+  const url = `${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(app.state.tournamentId)}`;
+  const status = app.syncStatus.kind === "unavailable"
+    ? <span className="red">⚪ Live sync unavailable (couldn&apos;t reach the sync service) — viewers need to refresh manually, same as before.</span>
+    : app.syncStatus.kind === "error"
+      ? <span className="red">🔴 Sync error — viewers may be seeing stale data ({app.syncStatus.message})</span>
+      : app.syncStatus.kind === "active"
+        ? <span className="green">🟢 Live sync active</span>
+        : <span className="muted">🔄 Connecting…</span>;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      window.prompt("Copy this link:", url);
+    }
+  }
+  return <div className="card" id="sync-status-panel">
+    <div className="card-title">Live Sync — viewer link</div>
+    <div className="field sync-link"><input type="text" readOnly value={url} onClick={(event) => event.currentTarget.select()} /></div>
+    <div className="btn-row sync-copy-row"><button className="btn btn-secondary" onClick={() => void copy()}>📋 Copy Live Link</button>{copied ? <span className="green">Copied!</span> : null}</div>
+    <div className="sync-status">{status}</div>
+  </div>;
+}
+
 export function RunningAdmin() {
   const app = useTournamentApp();
   const state = app.state;
@@ -491,6 +520,7 @@ export function RunningAdmin() {
       <TieBanners state={state} />
       {message ? <div className="msg msg-err">{message}</div> : null}
       {archiveStatus ? <div className="msg msg-ok" id="archive-save-status">{archiveStatus}</div> : null}
+      <LiveSyncCard />
       <div className="stats"><div><span>Round</span><strong>{phaseLabel(state)}</strong></div><div><span>{getGameFormat(state.gameFormat)?.unitLabelPlural}</span><strong>{assignments.length}</strong></div><div><span>Rooms</span><strong>{round.rooms.length}</strong></div><div><span>Advancing</span><strong>{round.isNoElim ? "All" : round.isFinal ? "—" : `${round.advTotal}${round.luckyCount ? ` + ${round.luckyCount} LL` : ""}`}</strong></div></div>
       <div className="card"><div className="card-title">Tournament progress</div><div className="timeline">{state.rounds.map((entry, index) => <div className="tl-item" key={index}><div className={`tl-dot ${index < state.curRound ? "done" : index === state.curRound ? "current" : ""}`}>{index < state.curRound ? "✓" : entry.isFinal ? "🏆" : entry.isSemis ? "S" : entry.roundNum}</div><div className="tl-label">{entry.isFinal ? "Final" : entry.isSemis ? "Semis" : `R${entry.roundNum}`}</div></div>)}</div></div>
       <ReservePanel state={state} />

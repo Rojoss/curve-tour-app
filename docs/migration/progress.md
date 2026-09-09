@@ -64,7 +64,13 @@
     - [x] Read-only archive Rankings/Bracket detail, immediate annotations,
       confirmed deletion, single/full JSON transfer, and 25 MiB validation.
     - [x] Live/archive Rankings PNG downloads and desktop/390 px archive checks.
-11. [ ] Firebase viewer/writer transport and concurrent merge behavior.
+11. [x] Firebase viewer/writer transport and concurrent merge behavior.
+    - [x] Injectable transport over the unchanged Firebase paths, debounced
+      proof-authorized writes, null-sentinel wire compatibility, and status UI.
+    - [x] Viewer waiting/live/stale behavior, read-only persistence policy,
+      writer subscriptions, URL lifecycle, promotion support, and teardown.
+    - [x] Deterministic in-memory coverage for multi-writer different-key merges,
+      dirty-score protection, and same-key last-write-wins behavior.
 12. [ ] Full parity matrix, deployment preview, rollback rehearsal, and cutover.
 
 ## Gate for starting slice 1

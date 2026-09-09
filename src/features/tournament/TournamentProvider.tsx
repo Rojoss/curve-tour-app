@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -26,7 +27,16 @@ import {
   saveAdminSession,
   saveLiveEnvelope,
   writeArchiveSnapshot,
+  normalizeLiveTournamentState,
 } from "../../lib/persistence";
+import { getFirebaseSyncTransport } from "../sync/firebase-client";
+import { SyncCoordinator, type SyncStatus, type SyncTransport } from "../sync/live-sync";
+
+declare global {
+  interface Window {
+    __CURVE_TOUR_SYNC_TRANSPORT__?: SyncTransport;
+  }
+}
 
 export interface TournamentAppContext {
   state: TournamentState;
@@ -37,6 +47,7 @@ export interface TournamentAppContext {
   isViewer: boolean;
   viewTournamentId: string | null;
   runtime: TournamentRuntime;
+  syncStatus: SyncStatus;
   setActiveTab(tab: ActiveTab): void;
   updateState(
     updater: TournamentState | ((current: TournamentState) => TournamentState),
@@ -59,6 +70,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
   const [isViewer, setIsViewer] = useState(false);
   const [viewTournamentId, setViewTournamentId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: "idle" });
+  const sync = useRef<SyncCoordinator | null>(null);
+  const stateRef = useRef(state);
+  const setupRef = useRef(setup);
+  const activeTabRef = useRef(activeTab);
+  const isViewerRef = useRef(isViewer);
+  stateRef.current = state;
+  setupRef.current = setup;
+  activeTabRef.current = activeTab;
+  isViewerRef.current = isViewer;
 
   useEffect(() => {
     const queryId = new URLSearchParams(window.location.search).get("t");
@@ -112,6 +133,47 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (!hydrated) return;
+    const coordinator = new SyncCoordinator(stateRef.current, {
+      transport: window.__CURVE_TOUR_SYNC_TRANSPORT__ ?? getFirebaseSyncTransport(),
+      onStatus: setSyncStatus,
+      onRemote(remote) {
+        const next = normalizeLiveTournamentState(remote, runtime.ids);
+        stateRef.current = next;
+        setState(next);
+        saveLiveEnvelope(
+          window.localStorage,
+          { T: next, setup: setupRef.current, activeTab: activeTabRef.current },
+          { isViewer: isViewerRef.current },
+        );
+      },
+    });
+    sync.current = coordinator;
+    return () => {
+      coordinator.dispose();
+      if (sync.current === coordinator) sync.current = null;
+    };
+  }, [hydrated, runtime]);
+
+  useEffect(() => {
+    if (!hydrated || !sync.current) return;
+    const proofHash = unlocked ? readAdminSession(window.localStorage).proofHash : null;
+    sync.current.configure(isViewer ? "viewer" : "writer", state.tournamentId, proofHash);
+  }, [hydrated, isViewer, state.tournamentId, unlocked]);
+
+  useEffect(() => {
+    sync.current?.setCurrent(state);
+  }, [state]);
+
+  useEffect(() => {
+    if (!hydrated || isViewer) return;
+    const url = state.tournamentId && state.started
+      ? `${window.location.pathname}?t=${encodeURIComponent(state.tournamentId)}`
+      : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, [hydrated, isViewer, state.started, state.tournamentId]);
+
+  useEffect(() => {
     if (!hydrated || isViewer || state.autoSaved) return;
     const round = state.rounds[state.curRound];
     if (!round?.isFinal || !computeRankings(state)?.finalComplete) return;
@@ -132,6 +194,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const next = { ...state, autoSaved: true, needsSave: false };
       setState(next);
       persist(next, setup, activeTab);
+      sync.current?.updateLocal(state, next);
       window.dispatchEvent(new CustomEvent("curve-tour:archive-status", { detail: "Tournament archived automatically." }));
     } catch (error) {
       console.warn("Could not automatically archive completed tournament", error);
@@ -142,6 +205,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     (tab: ActiveTab) => {
       setActiveTabState(tab);
       persist(state, setup, tab);
+      sync.current?.schedulePush();
     },
     [persist, setup, state],
   );
@@ -152,6 +216,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setState((current) => {
         const next = typeof updater === "function" ? updater(current) : updater;
         persist(next, setup, activeTab);
+        sync.current?.updateLocal(current, next);
         return next;
       });
     },
@@ -164,6 +229,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setSetup((current) => {
         const next = typeof updater === "function" ? updater(current) : updater;
         persist(state, next, activeTab);
+        sync.current?.schedulePush();
         return next;
       });
     },
@@ -203,6 +269,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       isViewer,
       viewTournamentId,
       runtime,
+      syncStatus,
       setActiveTab,
       updateState,
       updateSetup,
@@ -215,6 +282,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       isViewer,
       lockAdmin,
       runtime,
+      syncStatus,
       setActiveTab,
       setup,
       state,

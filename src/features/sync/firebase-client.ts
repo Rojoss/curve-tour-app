@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getDatabase, ref, set, type Database } from "firebase/database";
+import { getDatabase, onValue, ref, set, type Database } from "firebase/database";
+import type { SyncTransport } from "./live-sync";
 
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAzbwk2ZJj2jmtKRFjzDJyPk4ePmF3Q04M",
@@ -27,6 +28,17 @@ export function getFirebaseDatabase(): Database | null {
     database = null;
   }
   return database;
+}
+
+export function getFirebaseSyncTransport(): SyncTransport | null {
+  const db = getFirebaseDatabase();
+  if (!db) return null;
+  return {
+    write: (tournamentId, payload) => set(ref(db, `tournaments/${tournamentId}`), payload),
+    subscribe(tournamentId, onPayload, onError) {
+      return onValue(ref(db, `tournaments/${tournamentId}`), (snapshot) => onPayload(snapshot.val()), onError);
+    },
+  };
 }
 
 export async function sha256Hex(value: string): Promise<string> {
