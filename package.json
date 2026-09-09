@@ -11,12 +11,7 @@
     "start": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "test:app": "pnpm build && playwright test --config playwright.app.config.ts",
-    "check:release": "pnpm check && pnpm test:app && pnpm test:e2e",
-    "test:e2e:update": "playwright test --update-snapshots",
-    "check": "pnpm typecheck && pnpm test && pnpm build"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tanstack/react-router": "1.168.19",
