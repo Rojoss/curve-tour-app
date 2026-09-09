@@ -53,10 +53,7 @@ export function generateTournament(
   if (form.scheduleLogic === "kings-valley") {
     return generationError("This schedule logic is not available yet.");
   }
-  const schedule = form.scheduleLogic as Exclude<
-    ScheduleLogicKey,
-    "kings-valley"
-  >;
+  const schedule = form.scheduleLogic;
   const floorIdeal = format.defaultRoomSize?.ideal ?? format.idealRoomSize;
   if (!floorIdeal) return generationError("This game format has no room size.");
   const floorMin = getMinimumBracketUnits(schedule, {

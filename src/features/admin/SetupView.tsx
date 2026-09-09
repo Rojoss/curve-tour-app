@@ -46,7 +46,7 @@ export function SetupView() {
   );
 
   function change(key: SetupKey, value: string) {
-    updateSetup((current) => ({ ...current, [key]: value } as PersistedSetup));
+    updateSetup((current) => ({ ...current, [key]: value }));
   }
 
   function changeFormat(value: string) {

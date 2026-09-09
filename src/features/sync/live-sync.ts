@@ -64,7 +64,7 @@ export function mergeRemoteWriterState(
   }
   delete remote.scores;
   delete remote.finalScores;
-  return { ...current, ...remote, scores, finalScores } as TournamentState;
+  return { ...current, ...remote, scores, finalScores };
 }
 
 export interface SyncCoordinatorOptions {
@@ -82,7 +82,6 @@ export class SyncCoordinator {
   private current: TournamentState;
   private mode: SyncMode = "writer";
   private tournamentId: string | null = null;
-  private proofHash: string | null = null;
   private dirtyScores = new Set<string>();
   private dirtyFinalScores = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -96,11 +95,10 @@ export class SyncCoordinator {
     this.delayMs = options.delayMs ?? 400;
   }
 
-  configure(mode: SyncMode, tournamentId: string | null, proofHash: string | null): void {
+  configure(mode: SyncMode, tournamentId: string | null): void {
     const subscriptionChanged = mode !== this.mode || tournamentId !== this.tournamentId;
     this.mode = mode;
     this.tournamentId = tournamentId;
-    this.proofHash = proofHash;
     if (!subscriptionChanged) return;
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -135,18 +133,18 @@ export class SyncCoordinator {
   }
 
   schedulePush(): void {
-    if (this.mode === "viewer" || !this.transport || !this.tournamentId || !this.proofHash) return;
+    if (this.mode === "viewer" || !this.transport || !this.tournamentId) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.push(), this.delayMs);
   }
 
   private async push(): Promise<void> {
     this.timer = null;
-    if (this.mode === "viewer" || !this.transport || !this.tournamentId || !this.proofHash) return;
+    if (this.mode === "viewer" || !this.transport || !this.tournamentId) return;
     const stateAtPush = JSON.parse(JSON.stringify(this.current)) as TournamentState;
     const pushedScores = Object.fromEntries([...this.dirtyScores].map((key) => [key, stateAtPush.scores[key]]));
     const pushedFinalScores = Object.fromEntries([...this.dirtyFinalScores].map((key) => [key, stateAtPush.finalScores[key]]));
-    const payload = marshalNullsForFirebase({ ...stateAtPush, adminProof: this.proofHash });
+    const payload = marshalNullsForFirebase(stateAtPush);
     try {
       await this.transport.write(this.tournamentId, payload);
       for (const [key, value] of Object.entries(pushedScores)) if (this.current.scores[key] === value) this.dirtyScores.delete(key);

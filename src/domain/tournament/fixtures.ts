@@ -8,8 +8,6 @@ import type {
 } from "./types";
 
 export const LEGACY_LIVE_STATE_KEY = "curveFFA_state_v1";
-export const LEGACY_ADMIN_UNLOCKED_KEY = "curveFFA_admin_unlocked";
-export const LEGACY_ADMIN_PROOF_HASH_KEY = "curveFFA_admin_proof_hash";
 export const LEGACY_ARCHIVE_INDEX_KEY = "curveFFA_archive_index";
 export const LEGACY_ARCHIVE_ENTRY_PREFIX = "curveFFA_archive_";
 export const LEGACY_BRACKET_FOLLOW_KEY = "curveFFA_bracket_follow";

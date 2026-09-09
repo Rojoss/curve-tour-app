@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 import type { ReactNode } from "react";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { AuthProvider } from "../features/auth/AuthProvider";
+import { getInitialAuth } from "../features/auth/server/auth.server-fns";
 import "@/styles.css";
 
 export const Route = createRootRoute({
+  loader: () => getInitialAuth(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -17,9 +20,12 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const initialAuth = Route.useLoaderData();
   return (
     <RootDocument>
-      <Outlet />
+      <AuthProvider initialAuth={initialAuth}>
+        <Outlet />
+      </AuthProvider>
     </RootDocument>
   );
 }

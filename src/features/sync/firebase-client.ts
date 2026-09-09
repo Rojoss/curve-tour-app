@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getDatabase, onValue, ref, set, type Database } from "firebase/database";
+import { getDatabase, onValue, ref, type Database } from "firebase/database";
 import type { SyncTransport } from "./live-sync";
+import { writeTournament } from "./tournament-write.server-fns";
 
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAzbwk2ZJj2jmtKRFjzDJyPk4ePmF3Q04M",
@@ -34,42 +35,11 @@ export function getFirebaseSyncTransport(): SyncTransport | null {
   const db = getFirebaseDatabase();
   if (!db) return null;
   return {
-    write: (tournamentId, payload) => set(ref(db, `tournaments/${tournamentId}`), payload),
+    write: async (tournamentId, payload) => {
+      await writeTournament({ data: { tournamentId, payload } });
+    },
     subscribe(tournamentId, onPayload, onError) {
       return onValue(ref(db, `tournaments/${tournamentId}`), (snapshot) => onPayload(snapshot.val()), onError);
     },
   };
-}
-
-export async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export class AdminVerificationOfflineError extends Error {
-  readonly code = "OFFLINE";
-}
-
-export async function verifyAdminSecret(secret: string): Promise<string> {
-  const db = getFirebaseDatabase();
-  if (!db) throw new AdminVerificationOfflineError("Live sync unavailable");
-  const hash = await sha256Hex(secret);
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      set(ref(db, "adminAuth/verify"), hash),
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(
-          () => reject(new AdminVerificationOfflineError("Verification timed out")),
-          5_000,
-        );
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
-  return hash;
 }

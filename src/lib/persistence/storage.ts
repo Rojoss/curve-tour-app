@@ -1,6 +1,4 @@
 import {
-  LEGACY_ADMIN_PROOF_HASH_KEY,
-  LEGACY_ADMIN_UNLOCKED_KEY,
   LEGACY_BRACKET_FOLLOW_KEY,
   LEGACY_LIVE_STATE_KEY,
   type IdSource,
@@ -48,31 +46,6 @@ export function saveLiveEnvelope(
 
 export function clearLiveEnvelope(storage: BrowserStorage): void {
   storage.removeItem(LEGACY_LIVE_STATE_KEY);
-}
-
-export interface AdminSession {
-  unlocked: boolean;
-  proofHash: string | null;
-}
-
-export function readAdminSession(storage: BrowserStorage): AdminSession {
-  return {
-    unlocked: storage.getItem(LEGACY_ADMIN_UNLOCKED_KEY) === "true",
-    proofHash: storage.getItem(LEGACY_ADMIN_PROOF_HASH_KEY),
-  };
-}
-
-export function saveAdminSession(
-  storage: BrowserStorage,
-  proofHash: string,
-): void {
-  storage.setItem(LEGACY_ADMIN_UNLOCKED_KEY, "true");
-  storage.setItem(LEGACY_ADMIN_PROOF_HASH_KEY, proofHash);
-}
-
-export function clearAdminSession(storage: BrowserStorage): void {
-  storage.removeItem(LEGACY_ADMIN_UNLOCKED_KEY);
-  storage.removeItem(LEGACY_ADMIN_PROOF_HASH_KEY);
 }
 
 export function readBracketFollow(storage: BrowserStorage): string | null {

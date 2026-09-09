@@ -67,7 +67,7 @@ export function normalizeLiveTournamentState(
 export function normalizePersistedSetup(value: unknown): PersistedSetup {
   const raw = isRecord(value) ? value : {};
   const setup = createLegacySetupFixture();
-  for (const key of Object.keys(setup) as Array<keyof PersistedSetup>) {
+  for (const key of Object.keys(setup) as (keyof PersistedSetup)[]) {
     if (key !== "poolingPhase" && raw[key] !== undefined) {
       // Each known control is restored independently by legacy loadState().
       (setup as unknown as Record<string, unknown>)[key] = raw[key];

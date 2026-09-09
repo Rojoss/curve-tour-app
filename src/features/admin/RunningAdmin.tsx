@@ -396,7 +396,7 @@ function ManageRoster({ state }: { state: TournamentState }) {
           }
         }
         if (teams.some((entry) => entry.teamName === replacement?.teamName) && !window.confirm(`A team called "${replacement.teamName}" is already competing. Add it anyway?`)) return;
-        app.updateState((current) => swapTeam(current, team.teamId, replacement as TournamentTeam));
+        app.updateState((current) => swapTeam(current, team.teamId, replacement));
       }}>⇄</Button><Button size="sm" title="Remove team" onClick={() => {
         if (state.gamemodeConfig.oddCountStrategy === "none" && (state.assignments[state.curRound] ?? []).some((entry) => entry.name === team.teamId)) {
           const ideal = state.gamemodeConfig.roomSize?.ideal ?? 1;

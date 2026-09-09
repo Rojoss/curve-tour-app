@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { ActiveTab } from "../../domain/tournament";
-import { AdminPasswordModal } from "../auth/AdminPasswordModal";
+import { CfpLoginModal } from "../auth/CfpLoginModal";
+import { formatAccountRole } from "../auth/auth.shared";
+import { useAuth } from "../auth/AuthProvider";
 import { BracketView } from "../bracket/BracketView";
 import { SetupView } from "../admin/SetupView";
 import { RunningAdmin } from "../admin/RunningAdmin";
@@ -20,12 +22,13 @@ const TABS: Array<{ key: ActiveTab; label: string }> = [
 
 export function AppShell() {
   const app = useTournamentApp();
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const auth = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
   const currentRound = app.state.rounds[app.state.curRound];
 
   function chooseTab(tab: ActiveTab) {
     if (tab === "admin" && !app.unlocked) {
-      setPasswordOpen(true);
+      setLoginOpen(true);
       return;
     }
     app.setActiveTab(tab);
@@ -71,8 +74,11 @@ export function AppShell() {
           <section id="view-admin">
             <Panel>
               <PanelTitle>Admin Access</PanelTitle>
-              <Alert tone="success">🔓 Unlocked in this browser.</Alert>
-              <ButtonRow><Button size="sm" variant="warning" onClick={app.lockAdmin}>🔒 Lock Admin</Button></ButtonRow>
+              <Alert tone="success">
+                Signed in as <strong>{auth.username}</strong>
+                {auth.roles.length ? ` · ${auth.roles.map(formatAccountRole).join(", ")}` : ""}
+              </Alert>
+              <ButtonRow><Button size="sm" variant="warning" onClick={app.lockAdmin}>Sign out</Button></ButtonRow>
             </Panel>
             {app.state.started ? <RunningAdmin /> : <SetupView />}
           </section>
@@ -95,12 +101,12 @@ export function AppShell() {
             ? "The live-sync library couldn’t load — check your connection and reload the page."
             : "Loading the live tournament."}</p>
       </Modal></div> : null}
-      <AdminPasswordModal
-        open={passwordOpen}
-        onCancel={() => setPasswordOpen(false)}
-        onUnlocked={(proof) => {
-          app.unlockAdmin(proof);
-          setPasswordOpen(false);
+      <CfpLoginModal
+        open={loginOpen}
+        onCancel={() => setLoginOpen(false)}
+        onSignedIn={() => {
+          app.unlockAdmin();
+          setLoginOpen(false);
         }}
       />
     </div>

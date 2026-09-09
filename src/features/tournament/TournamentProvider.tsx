@@ -19,18 +19,16 @@ import {
   type TournamentState,
 } from "../../domain/tournament";
 import {
-  clearAdminSession,
   findLatestArchiveEntryForTournament,
   loadLiveEnvelope,
   loadArchiveIndex,
-  readAdminSession,
-  saveAdminSession,
   saveLiveEnvelope,
   writeArchiveSnapshot,
   normalizeLiveTournamentState,
 } from "../../lib/persistence";
 import { getFirebaseSyncTransport } from "../sync/firebase-client";
 import { SyncCoordinator, type SyncStatus, type SyncTransport } from "../sync/live-sync";
+import { useAuth } from "../auth/AuthProvider";
 
 declare global {
   interface Window {
@@ -55,19 +53,19 @@ export interface TournamentAppContext {
   updateSetup(
     updater: PersistedSetup | ((current: PersistedSetup) => PersistedSetup),
   ): void;
-  unlockAdmin(proofHash: string): void;
+  unlockAdmin(): void;
   lockAdmin(): void;
 }
 
 const Context = createContext<TournamentAppContext | null>(null);
 
 export function TournamentProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
   const runtime = useMemo(() => createTournamentRuntime(), []);
   const [state, setState] = useState(createEmptyTournamentState);
   const [setup, setSetup] = useState(createLegacySetupFixture);
   const [activeTab, setActiveTabState] = useState<ActiveTab>("bracket");
   const [hydrated, setHydrated] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
   const [isViewer, setIsViewer] = useState(false);
   const [viewTournamentId, setViewTournamentId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: "idle" });
@@ -83,8 +81,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const queryId = new URLSearchParams(window.location.search).get("t");
-    const admin = readAdminSession(window.localStorage);
-    const viewer = Boolean(queryId) && !admin.unlocked;
+    window.localStorage.removeItem("curveFFA_admin_unlocked");
+    window.localStorage.removeItem("curveFFA_admin_proof_hash");
+    const viewer = Boolean(queryId) && !auth.canAdmin;
     let loadedState = createEmptyTournamentState();
     let loadedSetup = createLegacySetupFixture();
     let loadedTab: ActiveTab = "bracket";
@@ -106,7 +105,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     setState(loadedState);
     setSetup(loadedSetup);
     setActiveTabState(viewer ? "bracket" : loadedTab);
-    setUnlocked(admin.unlocked);
     setIsViewer(viewer);
     setViewTournamentId(queryId);
     setHydrated(true);
@@ -157,9 +155,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated || !sync.current) return;
-    const proofHash = unlocked ? readAdminSession(window.localStorage).proofHash : null;
-    sync.current.configure(isViewer ? "viewer" : "writer", state.tournamentId, proofHash);
-  }, [hydrated, isViewer, state.tournamentId, unlocked]);
+    sync.current.configure(auth.canAdmin && !isViewer ? "writer" : "viewer", state.tournamentId);
+  }, [auth.canAdmin, hydrated, isViewer, state.tournamentId]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!auth.canAdmin) {
+      if (activeTabRef.current === "admin") setActiveTabState("bracket");
+      if (viewTournamentId) setIsViewer(true);
+      return;
+    }
+    if (isViewer) {
+      setIsViewer(false);
+      const next = { ...stateRef.current, tournamentId: viewTournamentId };
+      stateRef.current = next;
+      setState(next);
+      persist(next, setupRef.current, "admin", false);
+      setActiveTabState("admin");
+    }
+  }, [auth.canAdmin, hydrated, isViewer, persist, viewTournamentId]);
 
   useEffect(() => {
     sync.current?.setCurrent(state);
@@ -236,9 +250,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [activeTab, persist, state],
   );
   const unlockAdmin = useCallback(
-    (proofHash: string) => {
-      saveAdminSession(window.localStorage, proofHash);
-      setUnlocked(true);
+    () => {
       if (isViewer) {
         setIsViewer(false);
         const next = {
@@ -253,11 +265,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [isViewer, persist, setup, state, viewTournamentId],
   );
   const lockAdmin = useCallback(() => {
-    clearAdminSession(window.localStorage);
-    setUnlocked(false);
+    auth.logout();
     setActiveTabState("bracket");
+    if (viewTournamentId) setIsViewer(true);
     persist(state, setup, "bracket");
-  }, [persist, setup, state]);
+  }, [auth, persist, setup, state, viewTournamentId]);
 
   const value = useMemo<TournamentAppContext>(
     () => ({
@@ -265,7 +277,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setup,
       activeTab,
       hydrated,
-      unlocked,
+      unlocked: auth.canAdmin,
       isViewer,
       viewTournamentId,
       runtime,
@@ -287,7 +299,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setup,
       state,
       unlockAdmin,
-      unlocked,
+      auth.canAdmin,
       updateSetup,
       updateState,
       viewTournamentId,
