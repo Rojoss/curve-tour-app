@@ -20,15 +20,15 @@ an isolated service or human review.
 For each applicable row, cover minimum, normal, odd, near-cap, and override
 boundaries. Fix random seed, clock, and ID generator.
 
-- [ ] FFA × single elimination × none/qualification/Swiss/group.
-- [ ] FFA × shared-final double elimination × every pooling phase.
-- [ ] 2v2v2v2 × both compatible schedule logics × every pooling phase.
-- [ ] 3v3v3 × both compatible schedule logics × every pooling phase.
-- [ ] 3v3 × single/race-double × none/bye/flex × every pooling phase.
-- [ ] 1v1 × single/race-double × none/bye × every pooling phase.
+- [x] FFA × single elimination × none/qualification/Swiss/group.
+- [x] FFA × shared-final double elimination × every pooling phase.
+- [x] 2v2v2v2 × both compatible schedule logics × every pooling phase.
+- [x] 3v3v3 × both compatible schedule logics × every pooling phase.
+- [x] 3v3 × single/race-double × none/bye/flex × every pooling phase.
+- [x] 1v1 × single/race-double × none/bye × every pooling phase.
 - [x] Physical room-cap validation at 10 and rejection above 10.
-- [ ] Semis/Final sizes and 1–4 game combinations.
-- [ ] WB/LB target races and shared-Final LB qualifier boundaries.
+- [x] Semis/Final sizes and 1–4 game combinations.
+- [x] WB/LB target races and shared-Final LB qualifier boundaries.
 - [x] Circle-method schedules for even and odd group sizes, mixed group lengths,
   snake seeding, whole-group byes, and single/double round robin.
 - [x] Representative Qualification, Swiss-with-bye, no-pooling flex, and Group
@@ -46,12 +46,12 @@ assignments, byes, pending seeds, and relevant validation text.
 ## Roster and tournament management
 
 - [x] Sixteen-player individual roster loads and generates a preview.
-- [ ] Blank lines, whitespace, duplicate individual names.
+- [x] Blank lines, whitespace, duplicate individual names.
 - [x] Baseline 3-member team parsing, optional user IDs, and missing-slot padding.
-- [ ] Team parsing for 2-member formats, duplicate team names, and empty teams.
-- [ ] Reserve team and individual-member reserve parsing.
-- [ ] Add/remove reserve and walk-up under valid and invalid room shapes.
-- [ ] Rename individual, team, and member with completed history.
+- [x] Team parsing for 2-member formats, duplicate team names, and empty teams.
+- [x] Reserve team and individual-member reserve parsing.
+- [x] Add/remove reserve and walk-up under valid and invalid room shapes.
+- [x] Rename individual, team, and member with completed history.
 - [x] Swap current individual and whole team.
 - [x] Vacate/fill team member and change designated defender.
 - [x] Group Stage reserve prohibition.
@@ -64,7 +64,7 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Fair Points ordering and stable tie clusters.
 - [x] Ordinary tie resolution and invalidation after score edit.
 - [x] Qualification cutoff tie and Group Stage cutoff tie.
-- [ ] Lucky-loser calculation and display.
+- [x] Lucky-loser calculation and display.
 - [x] Pure lucky-loser candidate ratios/selection and zero-total exclusion.
 - [x] Ordinary and WB/LB direct-advancer, loser, and lucky-loser splits.
 - [x] Per-room tie detection and ordering, including old string and current
@@ -73,15 +73,15 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Cumulative Qualification/Swiss and per-group Fair Points standings,
   including qualifier seeding by finish tier across groups.
 - [x] Multiple byes and pooling bye rotation.
-- [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
+- [x] Swiss rematch avoidance and unavoidable-rematch fallback.
 - [x] Deterministic snake/Fisher-Yates seeding and best-effort same-group swap.
 - [x] Swiss fold pairing with odd-field bye rotation and a resolvable local
   rematch swap.
-- [ ] Same-group avoidance entering the bracket.
-- [ ] Every WB/LB routing transition including non-adjacent pending seeds.
+- [x] Same-group avoidance entering the bracket.
+- [x] Every WB/LB routing transition including non-adjacent pending seeds.
 - [x] Known legacy single-game Final completion and multi-game tab failures,
   plus the approved replacement fixes.
-- [ ] Multi-game Semis/Final totals and incomplete-game behavior after the known
+- [x] Multi-game Semis/Final totals and incomplete-game behavior after the known
   tab defect is explicitly resolved or preserved.
 - [x] Grand Final race completion for both target sides.
 - [x] Pure Grand Final race counting with a tied game, winner-side completion,
@@ -92,7 +92,7 @@ assignments, byes, pending seeds, and relevant validation text.
   current-round score entry, and one-game Final score entry.
 - [x] Representative live active rankings and completed Final champion,
   finalist, and eliminated order in the replacement UI.
-- [ ] Additional Final rankings for bye, tie-break, and team display cases.
+- [x] Additional Final rankings for bye, tie-break, and team display cases.
 - [x] Representative complete/incomplete Final rankings, room-share ordering,
   active pooling metadata, and double-elimination second-loss ranking.
 

@@ -72,6 +72,14 @@
     - [x] Deterministic in-memory coverage for multi-writer different-key merges,
       dirty-score protection, and same-key last-write-wins behavior.
 12. [ ] Full parity matrix, deployment preview, rollback rehearsal, and cutover.
+    - [x] Exhaustive supported 40-combination generation matrix and 1–4 game
+      Semis/Final selections.
+    - [x] Reproducible `pnpm check:release` gate and Node production-server
+      HTTP smoke test.
+    - [x] Frozen-app hash verification, full browser regression, rollback tag,
+      and documented rollback procedure.
+    - [ ] Provider-specific preview deployment, manual visual/network acceptance,
+      and production traffic switch (owner/environment sign-off required).
 
 ## Gate for starting slice 1
 

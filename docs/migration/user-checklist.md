@@ -1,21 +1,21 @@
-# Owner checklist before migration slice 1
+# Owner checklist for production cutover
 
-Only the first two items block local domain migration. The remaining decisions can
-be answered now or before their affected slice.
+All local migration slices are complete. These items are the remaining owner or
+environment decisions before production traffic is switched.
 
 ## Required to start
 
-- [ ] Review and approve the preparation diff, especially `AGENTS.md`, the behavior
+- [x] Review and approve the preparation diff, especially `AGENTS.md`, the behavior
   contract, and the migration order. Approval allows the preparation artifacts to
   be committed on `rework`.
-- [ ] Place at least one representative tournament/archive JSON export in the
+- [x] Place at least one representative tournament/archive JSON export in the
   ignored `migration-input/` directory, or provide its local path. Prefer a
   completed tournament using the most complex format you have actually run. The
-  migration agent will sanitize it before committing any derived fixture. If no
-  representative export exists, explicitly confirm that and synthetic fixtures
-  will be used instead.
+  migration agent will sanitize it before committing any derived fixture. The
+  owner confirmed none exists, so committed synthetic fixtures are used.
 
-Never place an admin password in the repository or chat.
+Never place an admin password in the repository. Rotate the credential after
+cutover because the current one was supplied through chat.
 
 ## Recommended decisions
 
@@ -43,5 +43,6 @@ Never place an admin password in the repository or chat.
 - [ ] Choose an isolated Firebase test target. Recommendation: Firebase Emulator
   Suite first, plus one manually approved smoke test in a separate non-production
   Firebase project before cutover.
-- [ ] Identify a low-risk real tournament or rehearsal that can serve as final
-  acceptance testing before production switches over.
+- [x] Identify a low-risk real tournament or rehearsal that can serve as final
+  acceptance testing before production switches over. The owner approved
+  disposable pre-launch production data for this purpose.

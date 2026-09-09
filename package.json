@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:app": "pnpm build && playwright test --config playwright.app.config.ts",
+    "check:release": "pnpm check && pnpm test:app && pnpm test:e2e",
     "test:e2e:update": "playwright test --update-snapshots",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },

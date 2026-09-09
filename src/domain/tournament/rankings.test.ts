@@ -103,4 +103,34 @@ describe("tournament rankings", () => {
       { name: "C", ri: 1, pct: 0.2 },
     ]);
   });
+
+  it("preserves tied Final ranks, team display members, and active byes", () => {
+    const final = { ...elimination, players: 2, rooms: [2], isFinal: true, numGames: 1 };
+    const teams = [
+      { teamId: "team-a", teamName: "Alpha", members: [{ name: "A1" }, { name: "A2" }] },
+      { teamId: "team-b", teamName: "Beta", members: [{ name: "B1" }, { name: "B2" }] },
+    ];
+    const tied = computeRankings(createEmptyTournamentState({
+      gameFormat: "team-2v2v2v2",
+      players: teams,
+      rounds: [final],
+      assignments: [[{ name: "team-a", room: 1 }, { name: "team-b", room: 1 }]],
+      finalScores: {
+        "game1-team-a-m0": 60, "game1-team-a-m1": 40,
+        "game1-team-b-m0": 50, "game1-team-b-m1": 50,
+      },
+    }))!;
+    expect(tied.finalists.map(({ label, members, rank }) => ({ label, members, rank }))).toEqual([
+      { label: "Alpha", members: ["A1", "A2"], rank: 1 },
+      { label: "Beta", members: ["B1", "B2"], rank: 1 },
+    ]);
+
+    const activeBye = computeRankings(createEmptyTournamentState({
+      players: ["A", "B"],
+      rounds: [elimination],
+      assignments: [[{ name: "A", room: null }, { name: "B", room: 1 }]],
+      byes: [["A"]],
+    }))!;
+    expect(activeBye.stillActive.find((entry) => entry.name === "A")?.room).toBeNull();
+  });
 });

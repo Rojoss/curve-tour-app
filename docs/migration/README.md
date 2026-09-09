@@ -1,7 +1,8 @@
 # Migration control center
 
-The migration is intentionally split into preparation, parity slices, and final
-cutover. Preparation does not include porting production features.
+The migration is split into preparation, parity slices, and final cutover. The
+local implementation slices are complete; production cutover awaits the owner
+sign-offs in `release-readiness.md`.
 
 ## Documents
 
@@ -11,6 +12,7 @@ cutover. Preparation does not include porting production features.
 - `decisions.md`: settled boundaries and unresolved product choices.
 - `progress.md`: slice order, gates, and current status.
 - `user-checklist.md`: owner inputs and decisions still needed.
+- `release-readiness.md`: final evidence, rollback, and cutover runbook.
 
 ## Commands
 
