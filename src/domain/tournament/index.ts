@@ -8,5 +8,6 @@ export * from "./roster";
 export * from "./runtime";
 export * from "./schedule-generation";
 export * from "./scoring";
+export * from "./seeding";
 export * from "./single-elimination";
 export * from "./types";

@@ -42,6 +42,8 @@
    - [x] Room tie detection/order, legacy resolution normalization,
      qualification/group cutoff ties, and lucky-loser selection primitives.
    - [x] Cumulative Qualification, Swiss, and Group Stage standings.
+   - [x] Deterministic random/snake seeding, Group Stage collision avoidance,
+     pooling-bye rotation, and Swiss fold/rematch handling.
    - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
    - [ ] Grand Final race state, completion, and rankings.
 5. [ ] Browser persistence and backwards-compatible normalization.

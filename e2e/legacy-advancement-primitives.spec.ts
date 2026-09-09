@@ -224,3 +224,86 @@ test("characterizes cumulative qualification and group standings", async ({
     },
   });
 });
+
+test("characterizes seeding, bye rotation, and Swiss rematch avoidance", async ({
+  page,
+}) => {
+  const actual = await page.evaluate(() => {
+    const legacy = window as unknown as Record<string, any>;
+    const originalRandom = Math.random;
+    const values = [0.4, 0.1, 0.8];
+    Math.random = () => values.shift() ?? 0;
+    const random = legacy.randomSeed(["A", "B", "C", "D"], [2, 2]);
+    Math.random = originalRandom;
+
+    legacy.T.groups = [
+      { label: "A", members: ["A1", "A2"] },
+      { label: "B", members: ["B1", "B2"] },
+    ];
+    const avoided = legacy.avoidSameGroupInFirstBracketRound([
+      { name: "A1", room: 1 }, { name: "A2", room: 1 },
+      { name: "B1", room: 2 }, { name: "B2", room: 2 },
+    ]);
+    legacy.T.poolingByeCounts = { A: 2, B: 0, C: 1 };
+    const poolingBye = legacy.selectPoolingBye([
+      { name: "A" }, { name: "B" }, { name: "C" },
+    ]);
+
+    Object.assign(legacy.T, {
+      gameFormat: "ffa-individual",
+      players: ["A", "B", "C", "D", "E"],
+      reserves: [],
+      poolingByeCounts: { C: 1 },
+      rounds: [{
+        roundNum: 1, players: 5, rooms: [2, 2], byeCount: 1,
+        isQual: false, isSwiss: true, isNoElim: true, isSemis: false,
+        isFinal: false, advPerRoom: null, advTotal: 5, luckyCount: 0,
+      }],
+      assignments: [[
+        { name: "A", room: 1 }, { name: "D", room: 1 },
+        { name: "C", room: 2 }, { name: "E", room: 2 },
+        { name: "B", room: null },
+      ]],
+      scores: {}, finalScores: {}, defenderChanges: {}, tieResolutions: {},
+      gamemodeConfig: { roomSize: { min: 2, max: 2, ideal: 2 } },
+    });
+    const swiss = legacy.swissFoldPair(["A", "B", "C", "D", "E"], 0);
+    return {
+      snakeRooms: legacy.snakeSeed(["A", "B", "C", "D", "E", "F", "G"], 3)
+        .map((entry: any) => entry.room),
+      random,
+      avoided,
+      poolingBye,
+      pairKey: legacy.swissPairKey("D", "A"),
+      swiss,
+      poolingByeCounts: legacy.T.poolingByeCounts,
+    };
+  });
+
+  expect(actual).toEqual({
+    snakeRooms: [1, 2, 3, 3, 2, 1, 1],
+    random: [
+      { name: "C", room: 1, isLucky: false },
+      { name: "D", room: 1, isLucky: false },
+      { name: "A", room: 2, isLucky: false },
+      { name: "B", room: 2, isLucky: false },
+    ],
+    avoided: [
+      { name: "A1", room: 1 }, { name: "A2", room: 2 },
+      { name: "B1", room: 1 }, { name: "B2", room: 2 },
+    ],
+    poolingBye: { name: "B" },
+    pairKey: "A|D",
+    swiss: {
+      seeded: [
+        { name: "A", room: 1, isLucky: false },
+        { name: "E", room: 1, isLucky: false },
+        { name: "C", room: 2, isLucky: false },
+        { name: "D", room: 2, isLucky: false },
+        { name: "B", room: null, isLucky: false },
+      ],
+      byeName: "B",
+    },
+    poolingByeCounts: { B: 1, C: 1 },
+  });
+});

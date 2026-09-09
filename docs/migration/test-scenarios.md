@@ -73,6 +73,9 @@ assignments, byes, pending seeds, and relevant validation text.
   including qualifier seeding by finish tier across groups.
 - [ ] Multiple byes and pooling bye rotation.
 - [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
+- [x] Deterministic snake/Fisher-Yates seeding and best-effort same-group swap.
+- [x] Swiss fold pairing with odd-field bye rotation and a resolvable local
+  rematch swap.
 - [ ] Same-group avoidance entering the bracket.
 - [ ] Every WB/LB routing transition including non-adjacent pending seeds.
 - [x] Known single-game Final completion failure and multi-game tab failure.
