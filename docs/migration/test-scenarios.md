@@ -35,6 +35,10 @@ boundaries. Fix random seed, clock, and ID generator.
   Stage schedule structures against the frozen legacy functions.
 - [x] Representative FFA gradual-cut and head-to-head-bye single-elimination
   schedules, including lucky-loser counts and multi-game Semis/Final metadata.
+- [x] Race-style double-elimination play order and route indices for power-of-two
+  and concentrated-bye fields.
+- [x] Shared-Final double-elimination WB/LB room cuts, deferred LB creation,
+  lucky-loser slots, route indices, and Final metadata for FFA and 3-way teams.
 
 Each fixture should contain selected setup, normalized roster, generated rounds,
 assignments, byes, pending seeds, and relevant validation text.

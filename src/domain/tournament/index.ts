@@ -1,4 +1,5 @@
 export * from "./fixtures";
+export * from "./double-elimination";
 export * from "./formats";
 export * from "./pooling";
 export * from "./room-distribution";
