@@ -21,6 +21,11 @@
 10. Preserve the legacy omission of `cfg-lb-qualifiers` from the live setup
     envelope during parity. The generated tournament state remains authoritative,
     and old/new saves stay mutually readable without adding a protocol field.
+11. Apply the owner's approved Final fixes in the replacement: every Final,
+    including a one-game Final, writes `finalScores`, and React's explicit game
+    panel state avoids hiding the multi-game wrapper. The frozen legacy tests
+    continue to characterize both old defects; replacement browser tests assert
+    the corrected behavior.
 
 ## Decisions required before affected slices
 

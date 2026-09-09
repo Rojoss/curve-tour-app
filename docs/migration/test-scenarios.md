@@ -52,10 +52,10 @@ assignments, byes, pending seeds, and relevant validation text.
 - [ ] Reserve team and individual-member reserve parsing.
 - [ ] Add/remove reserve and walk-up under valid and invalid room shapes.
 - [ ] Rename individual, team, and member with completed history.
-- [ ] Swap current individual and whole team.
-- [ ] Vacate/fill team member and change designated defender.
-- [ ] Group Stage reserve prohibition.
-- [ ] Reserve-window closure after first elimination.
+- [x] Swap current individual and whole team.
+- [x] Vacate/fill team member and change designated defender.
+- [x] Group Stage reserve prohibition.
+- [x] Reserve-window closure after first elimination.
 
 ## Scoring and progression
 
@@ -79,7 +79,8 @@ assignments, byes, pending seeds, and relevant validation text.
   rematch swap.
 - [ ] Same-group avoidance entering the bracket.
 - [ ] Every WB/LB routing transition including non-adjacent pending seeds.
-- [x] Known single-game Final completion failure and multi-game tab failure.
+- [x] Known legacy single-game Final completion and multi-game tab failures,
+  plus the approved replacement fixes.
 - [ ] Multi-game Semis/Final totals and incomplete-game behavior after the known
   tab defect is explicitly resolved or preserved.
 - [x] Grand Final race completion for both target sides.

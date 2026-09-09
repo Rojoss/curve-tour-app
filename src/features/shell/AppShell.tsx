@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ActiveTab } from "../../domain/tournament";
 import { AdminPasswordModal } from "../auth/AdminPasswordModal";
 import { SetupView } from "../admin/SetupView";
+import { RunningAdmin } from "../admin/RunningAdmin";
 import { useTournamentApp } from "../tournament/TournamentProvider";
 
 const TABS: Array<{ key: ActiveTab; label: string }> = [
@@ -67,12 +68,7 @@ export function AppShell() {
                 <button className="btn btn-amber btn-sm" onClick={app.lockAdmin}>🔒 Lock Admin</button>
               </div>
             </div>
-            {app.state.started ? (
-              <div id="panel-running" className="card">
-                <div className="card-title">Tournament running</div>
-                <p className="muted">The running Admin controls are being migrated in the next bounded slice.</p>
-              </div>
-            ) : <SetupView />}
+            {app.state.started ? <RunningAdmin /> : <SetupView />}
           </section>
         ) : null}
         {app.activeTab === "scoreboard" ? (
