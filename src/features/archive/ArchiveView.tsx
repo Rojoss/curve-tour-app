@@ -20,6 +20,17 @@ import { ArchivedBracket } from "../bracket/BracketView";
 import { RankingsContent } from "../rankings/RankingsView";
 import { downloadRankingsImage } from "../rankings/rankings-image";
 import { useTournamentApp } from "../tournament/TournamentProvider";
+import {
+  Alert,
+  Button,
+  ButtonRow,
+  Modal,
+  ModalActions,
+  Panel,
+  PanelTitle,
+  StatStrip,
+  Textarea,
+} from "../../components/ui";
 
 interface PendingImport {
   parsed: Extract<ParsedArchiveImport, { status: "valid" }>;
@@ -136,77 +147,76 @@ export function ArchiveView() {
     const state = normalizeLiveTournamentState(selected.snapshot, app.runtime.ids);
     const format = getGameFormat(state.gameFormat);
     return <div id="ar-detail-view">
-      <div className="btn-row archive-detail-actions">
-        <button className="btn btn-secondary" onClick={() => { setSelected(null); reload(); }}>← Back to Archive</button>
-        <button className="btn btn-secondary" onClick={() => downloadJson(`curve-tournament_${sanitizeFilename(selected.title)}_${new Date(selected.dateSaved).toISOString().slice(0, 10)}.json`, selected)}>⬇ Export JSON</button>
-        <button className="btn btn-secondary" onClick={() => void downloadRankingsImage(state)}>⬇ Rankings PNG</button>
-        <button className="btn btn-danger" onClick={() => {
+      <ButtonRow className="mt-0 mb-3.5">
+        <Button onClick={() => { setSelected(null); reload(); }}>← Back to Archive</Button>
+        <Button onClick={() => downloadJson(`curve-tournament_${sanitizeFilename(selected.title)}_${new Date(selected.dateSaved).toISOString().slice(0, 10)}.json`, selected)}>⬇ Export JSON</Button>
+        <Button onClick={() => void downloadRankingsImage(state)}>⬇ Rankings PNG</Button>
+        <Button variant="danger" onClick={() => {
           if (!window.confirm(`Permanently delete "${selected.title}" from the archive? This cannot be undone.`)) return;
           deleteArchive(window.localStorage, selected.id);
           setSelected(null);
           reload();
-        }}>Delete</button>
-      </div>
-      <div className="stats" id="ar-detail-summary">
-        <div><span>Tournament</span><strong className="cyan">{selected.title}</strong></div>
-        <div><span>Saved</span><strong>{new Date(selected.dateSaved).toLocaleString()}</strong></div>
-        <div><span>{format?.unitLabelPlural ?? "Players"}</span><strong>{state.players.length}</strong></div>
-        <div><span>Rounds played</span><strong>{state.rounds[state.curRound]?.roundNum ?? "—"}</strong></div>
-      </div>
-      <div className="card archive-notes">
-        <div className="card-title">Organiser annotations</div>
+        }}>Delete</Button>
+      </ButtonRow>
+      <div id="ar-detail-summary"><StatStrip items={[
+        { label: "Tournament", value: selected.title, valueClassName: "text-primary" },
+        { label: "Saved", value: new Date(selected.dateSaved).toLocaleString() },
+        { label: format?.unitLabelPlural ?? "Players", value: state.players.length },
+        { label: "Rounds played", value: state.rounds[state.curRound]?.roundNum ?? "—" },
+      ]} /></div>
+      <Panel className="mt-4">
+        <PanelTitle>Organiser annotations</PanelTitle>
         <div id="ar-annotations-list">
-          {!selected.annotations.length ? <div className="muted archive-note-empty">No annotations yet.</div> : selected.annotations.map((annotation, annotationIndex) => <div className="seed-card archive-note" key={`${annotation.timestamp}-${annotationIndex}`}>
-            <div className="archive-note-head"><div>{annotation.text}</div><button className="btn btn-secondary btn-sm" title="Delete" onClick={() => {
+          {!selected.annotations.length ? <div className="text-xs text-muted">No annotations yet.</div> : selected.annotations.map((annotation, annotationIndex) => <div className="mb-2 flex min-w-0 flex-col items-start gap-2 whitespace-pre-wrap rounded-[5px] border border-surface-hover bg-surface-low px-3 py-2" key={`${annotation.timestamp}-${annotationIndex}`}>
+            <div className="flex w-full items-start justify-between gap-2.5 text-sm"><div>{annotation.text}</div><Button size="sm" title="Delete" onClick={() => {
               if (!window.confirm("Delete this annotation? This cannot be undone.")) return;
               const annotations = selected.annotations.filter((_, indexToKeep) => indexToKeep !== annotationIndex);
               const updated = updateArchiveAnnotations(window.localStorage, selected.id, annotations);
               if (updated) setSelected(updated);
-            }}>✕</button></div>
-            <small>{new Date(annotation.timestamp).toLocaleString()}</small>
+            }}>✕</Button></div>
+            <small className="text-[0.68rem] text-muted">{new Date(annotation.timestamp).toLocaleString()}</small>
           </div>)}
         </div>
-        <div className="archive-note-add"><textarea id="ar-note-input" value={note} placeholder="Add a note about this tournament…" onChange={(event) => setNote(event.target.value)} /><button className="btn btn-secondary" onClick={() => {
+        <div className="flex items-start gap-2 max-[700px]:flex-col"><Textarea className="min-h-19 flex-1 max-[700px]:w-full" id="ar-note-input" value={note} placeholder="Add a note about this tournament…" onChange={(event) => setNote(event.target.value)} /><Button onClick={() => {
           const text = note.trim();
           if (!text) return;
           const updated = updateArchiveAnnotations(window.localStorage, selected.id, [...selected.annotations, { text, timestamp: new Date(app.runtime.clock.now()).toISOString() }]);
           if (updated) setSelected(updated);
           setNote("");
-        }}>Add annotation</button></div>
-      </div>
-      <div className="card"><div className="card-title">Final rankings</div><RankingsContent state={state} downloads={false} /></div>
-      <div className="card"><div className="card-title">Tournament bracket</div><ArchivedBracket state={state} /></div>
+        }}>Add annotation</Button></div>
+      </Panel>
+      <Panel><PanelTitle>Final rankings</PanelTitle><RankingsContent state={state} downloads={false} /></Panel>
+      <Panel><PanelTitle>Tournament bracket</PanelTitle><ArchivedBracket state={state} /></Panel>
     </div>;
   }
 
   return <div id="ar-list-view">
-    <div className="archive-toolbar">
-      <div><h2>Tournament Archive</h2><p className="muted">Saved tournament snapshots are stored in this browser.</p></div>
-      <div className="btn-row">
-        {index.length ? <button className="btn btn-secondary" onClick={() => {
+    <div className="mb-4.5 flex flex-wrap items-start justify-between gap-3.5">
+      <div><h2 className="mb-1 text-2xl font-bold text-primary">Tournament Archive</h2><p className="text-muted">Saved tournament snapshots are stored in this browser.</p></div>
+      <ButtonRow className="mt-0">
+        {index.length ? <Button onClick={() => {
           const now = new Date(app.runtime.clock.now()).toISOString();
           downloadJson(`curve-tournament-archive_${now.slice(0, 10)}.json`, archiveBundle(window.localStorage, now));
-        }}>⬇ Export full archive</button> : null}
-        <button className="btn btn-secondary" onClick={() => input.current?.click()}>⬆ Import JSON</button>
-        <input ref={input} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => void importFile(event)} />
-      </div>
+        }}>⬇ Export full archive</Button> : null}
+        <Button onClick={() => input.current?.click()}>⬆ Import JSON</Button>
+        <input ref={input} className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void importFile(event)} />
+      </ButtonRow>
     </div>
-    {status ? <div className="msg msg-info" role="status">{status}</div> : null}
-    {!sorted.length ? <div className="msg msg-info" id="ar-empty">No tournaments archived yet — completed tournaments saved from Admin will show up here, or import a previously exported file.</div> : <div id="ar-list" className="archive-list">{sorted.map((summary) => <button className="archive-row" key={summary.id} onClick={() => {
+    {status ? <Alert role="status">{status}</Alert> : null}
+    {!sorted.length ? <Alert id="ar-empty">No tournaments archived yet — completed tournaments saved from Admin will show up here, or import a previously exported file.</Alert> : <div id="ar-list" className="grid gap-2">{sorted.map((summary) => <button className="flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg border border-surface-hover bg-surface px-4 py-3 text-left text-foreground transition hover:border-primary hover:bg-primary-soft focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-primary" key={summary.id} onClick={() => {
       const entry = loadArchiveEntry(window.localStorage, summary.id);
       if (entry) setSelected(entry);
-    }}><span className="archive-row-title">{summary.title}</span><span className="archive-row-meta">{new Date(summary.dateSaved).toLocaleString()} · {summary.playerCount} players · {summary.roundsPlayed} round{summary.roundsPlayed === 1 ? "" : "s"} played</span></button>)}</div>}
-    {pending ? <div className="modal-overlay" role="presentation"><div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="archive-import-title">
-      <div className="modal-title" id="archive-import-title">{pending.parsed.isBundle ? "Some of these are already archived" : "Already in your archive"}</div>
+    }}><span className="text-lg font-bold">{summary.title}</span><span className="text-xs text-muted">{new Date(summary.dateSaved).toLocaleString()} · {summary.playerCount} players · {summary.roundsPlayed} round{summary.roundsPlayed === 1 ? "" : "s"} played</span></button>)}</div>}
+    {pending ? <Modal titleId="archive-import-title" title={pending.parsed.isBundle ? "Some of these are already archived" : "Already in your archive"}>
       <p>{pending.parsed.isBundle
         ? `${pending.collisions.length} of the ${pending.parsed.entries.length} tournaments in this file are already in your archive. How should those be handled? This choice applies to all ${pending.collisions.length}.`
         : `An archived tournament with this ID already exists ("${pending.collisions[0]?.title}"). Overwrite it, import it as a separate new entry, or cancel?`}</p>
-      <div className="modal-btns">
-        <button className="btn btn-danger" onClick={() => finishImport(pending.parsed, "overwrite")}>Overwrite existing</button>
-        <button className="btn btn-secondary" onClick={() => finishImport(pending.parsed, "new")}>{pending.parsed.isBundle ? "Import all as new copies" : "Import as new entry"}</button>
-        {pending.parsed.isBundle ? <button className="btn btn-secondary" onClick={() => finishImport(pending.parsed, "skip")}>Skip the duplicates</button> : null}
-        <button className="btn btn-secondary" onClick={() => setPending(null)}>Cancel</button>
-      </div>
-    </div></div> : null}
+      <ModalActions>
+        <Button variant="danger" onClick={() => finishImport(pending.parsed, "overwrite")}>Overwrite existing</Button>
+        <Button onClick={() => finishImport(pending.parsed, "new")}>{pending.parsed.isBundle ? "Import all as new copies" : "Import as new entry"}</Button>
+        {pending.parsed.isBundle ? <Button onClick={() => finishImport(pending.parsed, "skip")}>Skip the duplicates</Button> : null}
+        <Button onClick={() => setPending(null)}>Cancel</Button>
+      </ModalActions>
+    </Modal> : null}
   </div>;
 }

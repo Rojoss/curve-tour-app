@@ -8,9 +8,23 @@ import {
 } from "../../domain/tournament";
 import { useTournamentApp } from "../tournament/TournamentProvider";
 import { downloadRankingsImage } from "./rankings-image";
+import { Position } from "../../components/tournament/TournamentUnit";
+import { Alert, Badge, Button, ButtonRow, cn } from "../../components/ui";
 
 function Unit({ entry }: { entry: RankingDisplay }) {
-  return <span><strong>{entry.label}</strong>{entry.members?.length ? <small className="unit-members">{entry.members.join(" & ")}</small> : null}</span>;
+  return <span><strong>{entry.label}</strong>{entry.members?.length ? <small className="mt-0.5 block font-normal text-muted">{entry.members.join(" & ")}</small> : null}</span>;
+}
+
+function RankingGrid({ children }: { children: React.ReactNode }) {
+  return <div className="columns-1 gap-3.5 sm:columns-2 xl:columns-3">{children}</div>;
+}
+
+function RankingRow({ children, champion = false }: { children: React.ReactNode; champion?: boolean }) {
+  return <div className={cn("mb-2 grid min-h-13 break-inside-avoid grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-[5px] border border-surface-hover bg-surface px-2.5 py-2", champion && "border-success/40 bg-success-soft")}>{children}</div>;
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="mt-4.5 mb-2 text-[0.72rem] font-semibold tracking-[0.1em] text-muted uppercase">{children}</div>;
 }
 
 function RoundLabel({ round }: { round: TournamentRound }) {
@@ -22,23 +36,23 @@ function RosterOnly({ state }: { state: TournamentState }) {
     ...rosterKeys(state.players).map((name) => ({ name, badge: "Registered" })),
     ...rosterKeys(state.reserves).map((name) => ({ name, badge: "Reserve" })),
   ].sort((a, b) => unitDisplay(state, a.name).label.localeCompare(unitDisplay(state, b.name).label));
-  return <div className="rk-columns">{rows.map(({ name, badge }) => {
+  return <RankingGrid>{rows.map(({ name, badge }) => {
     const info = unitDisplay(state, name);
-    return <div className="rk-row" key={`${badge}-${name}`}><span className="rk-rank">—</span><span className="rk-unit"><Unit entry={{ name, ...info }} /></span><span className="pill pill-neut">{badge}</span></div>;
-  })}</div>;
+    return <RankingRow key={`${badge}-${name}`}><span className="text-center text-lg font-bold text-muted">—</span><span className="min-w-0"><Unit entry={{ name, ...info }} /></span><Badge>{badge}</Badge></RankingRow>;
+  })}</RankingGrid>;
 }
 
 export function RankingsContent({ state, downloads = true }: { state: TournamentState; downloads?: boolean }) {
   if (!state.players.length && !state.reserves.length) {
-    return <div className="msg msg-info">No players registered yet — check back once the organiser loads a roster in Admin.</div>;
+    return <Alert>No players registered yet — check back once the organiser loads a roster in Admin.</Alert>;
   }
   const data = computeRankings(state);
   if (!data) return <RosterOnly state={state} />;
   return <div id="rk-content">
-    <p className="muted">Live tournament ranking. Active entrants remain unranked until eliminated or the Final is complete.</p>
-    {downloads ? <div className="btn-row"><button className="btn btn-secondary btn-sm" onClick={() => void downloadRankingsImage(state)}>⬇ Download rankings PNG</button></div> : null}
-    {data.stillActive.length ? <><div className="rk-section-title">Still in tournament</div><div className="rk-columns">{data.stillActive.map((unit) => <div className="rk-row rk-active" key={unit.name}><span className="rk-rank">—</span><span className="rk-unit"><Unit entry={unit} /><small className="rk-sub"><RoundLabel round={data.lastRound} /> — {unit.room === null ? <strong className="amber">BYE — advances automatically</strong> : <>Room <strong>{unit.room}</strong></>}</small></span><span className="rk-status"><span className="pill pill-neut">Still in tournament</span>{unit.poolRank ? <small>#{unit.poolRank.rank}{unit.poolRank.fp !== null ? ` · ${unit.poolRank.fp.toFixed(3)} FP` : ""}</small> : null}</span></div>)}</div></> : null}
-    {data.finalComplete || data.eliminatedList.length ? <><div className="rk-section-title">Final standings</div><div className="rk-columns">{data.finalists.map((unit) => <div className={`rk-row ${unit.rank === 1 ? "rk-champion" : ""}`} key={unit.name}><span className={`pos-num ${unit.rank === 1 ? "top" : ""}`}>{unit.rank}</span><span className="rk-unit"><Unit entry={unit} /></span><span className="pill pill-final">🏆 Reached Final</span></div>)}{data.eliminatedList.map((unit) => <div className="rk-row" key={unit.name}><span className="pos-num">{unit.rank}</span><span className="rk-unit"><Unit entry={unit} /></span><span className="pill pill-neut"><RoundLabel round={unit.round} /></span></div>)}</div></> : null}
+    <p className="text-muted">Live tournament ranking. Active entrants remain unranked until eliminated or the Final is complete.</p>
+    {downloads ? <ButtonRow><Button size="sm" onClick={() => void downloadRankingsImage(state)}>⬇ Download rankings PNG</Button></ButtonRow> : null}
+    {data.stillActive.length ? <><SectionTitle>Still in tournament</SectionTitle><RankingGrid>{data.stillActive.map((unit) => <RankingRow key={unit.name}><span className="text-center text-lg font-bold text-muted">—</span><span className="min-w-0"><Unit entry={unit} /><small className="mt-1 block text-xs text-muted"><RoundLabel round={data.lastRound} /> — {unit.room === null ? <strong className="text-warning">BYE — advances automatically</strong> : <>Room <strong className="text-primary">{unit.room}</strong></>}</small></span><span className="flex flex-col items-end gap-1 text-[0.68rem] text-warning"><Badge>Still in tournament</Badge>{unit.poolRank ? <small>#{unit.poolRank.rank}{unit.poolRank.fp !== null ? ` · ${unit.poolRank.fp.toFixed(3)} FP` : ""}</small> : null}</span></RankingRow>)}</RankingGrid></> : null}
+    {data.finalComplete || data.eliminatedList.length ? <><SectionTitle>Final standings</SectionTitle><RankingGrid>{data.finalists.map((unit) => <RankingRow champion={unit.rank === 1} key={unit.name}><Position highlighted={unit.rank === 1}>{unit.rank}</Position><span className="min-w-0"><Unit entry={unit} /></span><Badge tone="primary">🏆 Reached Final</Badge></RankingRow>)}{data.eliminatedList.map((unit) => <RankingRow key={unit.name}><Position>{unit.rank}</Position><span className="min-w-0"><Unit entry={unit} /></span><Badge><RoundLabel round={unit.round} /></Badge></RankingRow>)}</RankingGrid></> : null}
   </div>;
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { verifyAdminSecret } from "../sync/firebase-client";
+import { Alert, Button, Field, Input, Modal, ModalActions } from "../../components/ui";
 
 export function AdminPasswordModal({
   open,
@@ -46,11 +47,9 @@ export function AdminPasswordModal({
   }
 
   return (
-    <div className="modal-overlay" role="presentation">
-      <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="admin-dialog-title">
-        <div className="modal-title" id="admin-dialog-title">🔒 Admin access</div>
-        <div className="field">
-          <input
+    <Modal title="🔒 Admin access" titleId="admin-dialog-title">
+        <Field label="Password">
+          <Input
             ref={input}
             type="password"
             placeholder="Enter admin password"
@@ -61,15 +60,14 @@ export function AdminPasswordModal({
               if (event.key === "Escape" && !checking) onCancel();
             }}
           />
-        </div>
-        {error ? <div className="msg msg-err">{error}</div> : null}
-        <div className="modal-btns">
-          <button className="btn btn-success" disabled={checking} onClick={() => void submit()}>
+        </Field>
+        {error ? <Alert tone="danger">{error}</Alert> : null}
+        <ModalActions>
+          <Button variant="success" disabled={checking} onClick={() => void submit()}>
             {checking ? "Checking…" : "Unlock"}
-          </button>
-          <button className="btn btn-secondary" disabled={checking} onClick={onCancel}>Cancel</button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button disabled={checking} onClick={onCancel}>Cancel</Button>
+        </ModalActions>
+    </Modal>
   );
 }

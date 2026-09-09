@@ -6,15 +6,11 @@ import {
   getUnitScore,
   orderRoomByScore,
   roomBasedComputeAdvancement,
-  unitDisplay,
   type TournamentState,
 } from "../../domain/tournament";
 import { useTournamentApp } from "../tournament/TournamentProvider";
-
-function Unit({ state, name }: { state: TournamentState; name: string }) {
-  const info = unitDisplay(state, name);
-  return <span><strong>{info.label}</strong>{info.members?.length ? <small className="unit-members">{info.members.join(" · ")}</small> : null}</span>;
-}
+import { ByeCard, Position, TournamentUnit } from "../../components/tournament/TournamentUnit";
+import { Alert, Badge, Panel, PanelTitle, StatStrip, Table, TableCell, TableHeadCell, TableRow, TableScroll } from "../../components/ui";
 
 function ScoreboardStandings({ state }: { state: TournamentState }) {
   const hasGroups = state.rounds.slice(0, state.curRound + 1).some((round) => round.isGroupStage);
@@ -24,13 +20,13 @@ function ScoreboardStandings({ state }: { state: TournamentState }) {
   const tables = hasGroups
     ? state.groups.map((group) => [group.label, groupStandings?.[group.label] ?? []] as const)
     : [[state.cfg.poolingPhase === "swiss" ? "Swiss Standings" : "Qualification Table", computeQualificationStandings(state)] as const];
-  return <div className="standings-grid">{tables.map(([label, entries]) => <div className="card" key={label}><div className="card-title">{label}</div><div className="table-scroll"><table><thead><tr><th>Pos</th><th>Player / Team</th><th>Fair Points</th><th>Score</th><th>Played</th></tr></thead><tbody>{entries.map((entry, index) => <tr key={entry.name}><td>{index + 1}</td><td><Unit state={state} name={entry.name} /></td><td>{entry.totalFP?.toFixed(5) ?? "—"}</td><td>{entry.totalScore}</td><td>{entry.played}</td></tr>)}</tbody></table></div></div>)}</div>;
+  return <div className="grid grid-cols-[repeat(auto-fit,minmax(310px,1fr))] gap-3.5">{tables.map(([label, entries]) => <Panel key={label}><PanelTitle>{label}</PanelTitle><TableScroll><Table><thead><TableRow><TableHeadCell>Pos</TableHeadCell><TableHeadCell>Player / Team</TableHeadCell><TableHeadCell>Fair Points</TableHeadCell><TableHeadCell>Score</TableHeadCell><TableHeadCell>Played</TableHeadCell></TableRow></thead><tbody>{entries.map((entry, index) => <TableRow key={entry.name}><TableCell>{index + 1}</TableCell><TableCell><TournamentUnit state={state} name={entry.name} /></TableCell><TableCell>{entry.totalFP?.toFixed(5) ?? "—"}</TableCell><TableCell>{entry.totalScore}</TableCell><TableCell>{entry.played}</TableCell></TableRow>)}</tbody></Table></TableScroll></Panel>)}</div>;
 }
 
 export function ScoreboardView() {
   const { state } = useTournamentApp();
   if (!state.rounds.length || !state.started) {
-    return <div className="msg msg-info">Start a tournament in Admin to see the live scoreboard.</div>;
+    return <Alert>Start a tournament in Admin to see the live scoreboard.</Alert>;
   }
   const roundIndex = state.curRound;
   const round = state.rounds[roundIndex];
@@ -42,7 +38,12 @@ export function ScoreboardView() {
   }
   const phase = round.isFinal ? "🏆 Grand Final" : round.isSemis ? "⚔ Semi-Finals" : `Round ${round.roundNum}`;
   return <div id="sb-content">
-    <div className="stats"><div><span>Round</span><strong>{phase}</strong></div><div><span>{format?.unitLabelPlural}</span><strong>{assignments.length}</strong></div><div><span>Rooms</span><strong>{round.rooms.length}</strong></div><div><span>Advancing</span><strong>{round.isNoElim ? "All" : round.isFinal ? "—" : round.advTotal}</strong></div></div>
+    <StatStrip items={[
+      { label: "Round", value: phase },
+      { label: format?.unitLabelPlural, value: assignments.length },
+      { label: "Rooms", value: round.rooms.length },
+      { label: "Advancing", value: round.isNoElim ? "All" : round.isFinal ? "—" : round.advTotal },
+    ]} />
     <ScoreboardStandings state={state} />
     {Array.from({ length: round.rooms.length }, (_, roomIndex) => {
       const room = roomIndex + 1;
@@ -58,12 +59,12 @@ export function ScoreboardView() {
       }));
       const rankedScored = orderRoomByScore(scored.filter((entry): entry is { name: string; score: number } => entry.score !== null), roundIndex, room, state);
       const ranked = [...rankedScored, ...scored.filter((entry) => entry.score === null)];
-      return <div className="room-block" key={room}><div className="room-header"><div className="room-name">{round.isGroupStage ? `Group ${round.roomGroups?.[roomIndex]} · ` : ""}Room {room}</div><div className="room-meta">Top {round.isNoElim ? "all" : direct} advance</div></div><div className="table-scroll"><table><thead><tr><th>Pos</th><th>{format?.unitLabel}</th><th>Score</th><th>Status</th></tr></thead><tbody>{ranked.map((entry, index) => {
+      return <div className="mb-5" key={room}><div className="flex flex-wrap items-center justify-between gap-1.5 rounded-t-lg border border-b-0 border-surface-hover bg-surface-low px-4 py-2.5"><div className="text-xl font-bold tracking-[0.05em] text-primary">{round.isGroupStage ? `Group ${round.roomGroups?.[roomIndex]} · ` : ""}Room {room}</div><div className="mt-0.5 text-xs text-muted">Top {round.isNoElim ? "all" : direct} advance</div></div><TableScroll><Table><thead><TableRow><TableHeadCell>Pos</TableHeadCell><TableHeadCell>{format?.unitLabel}</TableHeadCell><TableHeadCell>Score</TableHeadCell><TableHeadCell>Status</TableHeadCell></TableRow></thead><tbody>{ranked.map((entry, index) => {
         const scoredEntry = entry.score !== null;
         const advances = round.isNoElim || round.isFinal || index < direct || luckyNames.includes(entry.name);
-        return <tr key={entry.name} className={scoredEntry ? advances ? "adv-row" : "elim-row" : ""}><td><span className={`pos-num ${scoredEntry && advances ? "top" : ""}`}>{scoredEntry ? index + 1 : "—"}</span></td><td><Unit state={state} name={entry.name} /></td><td className="score-total">{entry.score ?? "—"}</td><td><span className={`pill ${!scoredEntry ? "pill-neut" : advances ? "pill-adv" : "pill-elim"}`}>{!scoredEntry ? "—" : advances ? "Advances" : "Eliminated"}</span></td></tr>;
-      })}</tbody></table></div></div>;
+        return <TableRow key={entry.name} tone={!scoredEntry ? "default" : advances ? "advance" : "eliminate"}><TableCell><Position highlighted={scoredEntry && advances}>{scoredEntry ? index + 1 : "—"}</Position></TableCell><TableCell><TournamentUnit state={state} name={entry.name} /></TableCell><TableCell className="text-base font-bold text-primary">{entry.score ?? "—"}</TableCell><TableCell><Badge tone={!scoredEntry ? "neutral" : advances ? "success" : "danger"}>{!scoredEntry ? "—" : advances ? "Advances" : "Eliminated"}</Badge></TableCell></TableRow>;
+      })}</tbody></Table></TableScroll></div>;
     })}
-    {(state.byes[roundIndex] ?? []).map((name) => <div className="bye-card" key={name}><strong>BYE</strong><Unit state={state} name={name} /><span className="pill pill-adv">Advances</span></div>)}
+    {(state.byes[roundIndex] ?? []).map((name) => <ByeCard key={name}><strong>BYE</strong><TournamentUnit state={state} name={name} /><Badge className="ml-auto" tone="success">Advances</Badge></ByeCard>)}
   </div>;
 }
