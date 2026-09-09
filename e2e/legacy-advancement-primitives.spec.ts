@@ -70,6 +70,25 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
       ],
       1,
     );
+    const ordinaryAdvancement = legacy.roomBasedComputeAdvancement(
+      0,
+      state.rounds[0],
+      {},
+    );
+    const doubleAdvancement = legacy.doubleEliminationComputeAdvancement(
+      0,
+      state.rounds[0],
+      {},
+    );
+    legacy.T.scores = {
+      ...state.scores,
+      "r0-rm1-p0": 90,
+      "r0-rm1-p1": 90,
+      "r0-rm1-p2": 100,
+    };
+    legacy.T.tieResolutions = { ...state.tieResolutions };
+    legacy.invalidateStaleTieResolutions(0, 1);
+    const invalidatedTieResolutions = { ...legacy.T.tieResolutions };
     return {
       resolutionLists: [
         legacy.tieResolutionList(state, "r0-rm1-s90"),
@@ -85,16 +104,9 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
       ),
       candidates: [firstCandidate, secondCandidate],
       picked: legacy.pickLuckyLosers([firstCandidate, secondCandidate], 1),
-      ordinaryAdvancement: legacy.roomBasedComputeAdvancement(
-        0,
-        state.rounds[0],
-        {},
-      ),
-      doubleAdvancement: legacy.doubleEliminationComputeAdvancement(
-        0,
-        state.rounds[0],
-        {},
-      ),
+      ordinaryAdvancement,
+      doubleAdvancement,
+      invalidatedTieResolutions,
       noCandidate: legacy.luckyLoserCandidate(
         [{ name: "X", score: 0 }, { name: "Y", score: 0 }],
         1,
@@ -140,6 +152,7 @@ test("characterizes ties, cutoff ordering, and lucky-loser selection", async ({
       losers: [{ name: "B" }, { name: "F" }],
       luckyNames: ["C", "E"],
     },
+    invalidatedTieResolutions: { "qual-cutoff": ["C"] },
     noCandidate: null,
     qualTie: {
       key: "qual-cutoff",
@@ -379,6 +392,32 @@ test("characterizes Grand Final races and fixed-game Finals progress", async ({
         "game1-B": 25, "game2-B": 15,
       },
     };
+    legacy.renderAdminRound = () => undefined;
+    legacy.T = {
+      ...undecided,
+      curRound: 0,
+      cfg: { poolingPhase: "none" },
+      byes: [], luckyLosers: [], poolingByeCounts: {}, pendingBracketSeeds: {},
+      qualTable: [], groupStandings: {}, groups: [], tieResolutions: {},
+      reserveOpen: false, needsSave: false,
+    };
+    const stillRacing = legacy.checkGrandFinalRace();
+    const openedGames = legacy.T.rounds[0].numGames;
+    legacy.T = {
+      ...legacy.T,
+      rounds: [{ ...grandFinal, numGames: 3 }],
+      finalScores: {
+        "game1-WB": 1, "game1-LB": 2,
+        "game2-WB": 1, "game2-LB": 2,
+        "game3-WB": 1, "game3-LB": 2,
+      },
+    };
+    const losingSideWon = legacy.computeGrandFinalRaceState(
+      legacy.T,
+      0,
+      legacy.T.rounds[0],
+    );
+    const raceEnded = legacy.checkGrandFinalRace();
     return {
       race: legacy.computeGrandFinalRaceState(raceState, 0, grandFinal),
       raceProgress: legacy.finalsProgressState(raceState, 0, grandFinal),
@@ -389,6 +428,7 @@ test("characterizes Grand Final races and fixed-game Finals progress", async ({
         0,
         plainFinal,
       ),
+      raceTransition: { stillRacing, openedGames, losingSideWon, raceEnded },
     };
   });
 
@@ -421,5 +461,16 @@ test("characterizes Grand Final races and fixed-game Finals progress", async ({
     complete: false,
     nextGame: 2,
     order: ["A", "B"],
+  });
+  expect(actual.raceTransition).toMatchObject({
+    stillRacing: true,
+    openedGames: 2,
+    losingSideWon: {
+      wbWins: 0,
+      lbWins: 3,
+      decided: true,
+      winnerName: "LB",
+    },
+    raceEnded: false,
   });
 });

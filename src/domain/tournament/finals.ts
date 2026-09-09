@@ -92,6 +92,41 @@ export function shouldOpenNextGrandFinalGame(
   );
 }
 
+export interface GrandFinalRaceTransition {
+  state: TournamentState;
+  /** Matches legacy checkGrandFinalRace(): skip auto-archive while true. */
+  inProgress: boolean;
+  openedNextGame: boolean;
+}
+
+/** Pure state transition counterpart of legacy checkGrandFinalRace(). */
+export function progressGrandFinalRace(
+  state: TournamentState,
+): GrandFinalRaceTransition {
+  const roundIndex = state.curRound;
+  const round = state.rounds[roundIndex];
+  if (!round || round.bracket !== "grand-final") {
+    return { state, inProgress: false, openedNextGame: false };
+  }
+  const race = computeGrandFinalRaceState(state, roundIndex, round);
+  if (!race || race.decided) {
+    return { state, inProgress: false, openedNextGame: false };
+  }
+  if (race.gamesPlayed !== (round.numGames ?? 0)) {
+    return { state, inProgress: true, openedNextGame: false };
+  }
+  const rounds = state.rounds.map((entry, index) =>
+    index === roundIndex
+      ? { ...entry, numGames: (entry.numGames ?? 0) + 1 }
+      : entry,
+  );
+  return {
+    state: { ...state, rounds },
+    inProgress: true,
+    openedNextGame: true,
+  };
+}
+
 export function finalsProgressState(
   state: TournamentState,
   roundIndex: number,

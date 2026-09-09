@@ -93,6 +93,108 @@ export function isTieResolved(
   return tieResolutionList(state, key).length >= cluster.players.length - 1;
 }
 
+export type TournamentTieCluster = RoomTieCluster | CutoffTieCluster;
+
+/**
+ * Recompute the live cumulative tables that legacy `getAllTies` refreshes
+ * before checking a last-pooling-round cutoff. Archive callers should pass
+ * their frozen snapshot directly to `getAllTies` instead of calling this.
+ */
+export function refreshRoundStandings(
+  state: TournamentState,
+  roundIndex: number,
+): TournamentState {
+  const round = state.rounds[roundIndex];
+  if (!round) return state;
+  const nextRound = state.rounds[roundIndex + 1];
+  let nextState = state;
+  if (
+    state.cfg.poolingPhase !== "none" &&
+    Boolean(round.isQual || round.isSwiss) &&
+    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss))
+  ) {
+    nextState = { ...nextState, qualTable: computeQualificationStandings(state) };
+  }
+  if (round.isGroupStage && !nextRound?.isGroupStage) {
+    nextState = {
+      ...nextState,
+      groupStandings: computeGroupStandings(nextState),
+    };
+  }
+  return nextState;
+}
+
+/** Collect every currently relevant room and standings-cutoff tie. */
+export function getAllTies(
+  state: TournamentState,
+  roundIndex: number,
+): Record<string, TournamentTieCluster> {
+  const round = state.rounds[roundIndex];
+  if (!round) return {};
+  const ties: Record<string, TournamentTieCluster> = {
+    ...detectTieBreaks(roundIndex, round, state),
+  };
+  const nextRound = state.rounds[roundIndex + 1];
+  const isLastStandingsRound =
+    state.cfg.poolingPhase !== "none" &&
+    Boolean(round.isQual || round.isSwiss) &&
+    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss));
+  if (isLastStandingsRound) {
+    const cutoff = detectQualCutoffTie(state);
+    if (cutoff) ties[cutoff.key] = cutoff;
+  }
+  if (round.isGroupStage && !nextRound?.isGroupStage) {
+    for (const group of state.groups) {
+      const cutoff = detectGroupCutoffTie(group.label, state);
+      if (cutoff) ties[cutoff.key] = cutoff;
+    }
+  }
+  return ties;
+}
+
+export function hasPendingTies(
+  state: TournamentState,
+  roundIndex: number,
+): boolean {
+  return Object.entries(getAllTies(state, roundIndex)).some(
+    ([key, cluster]) => !isTieResolved(key, cluster, state),
+  );
+}
+
+/**
+ * Drop room tie decisions whose recorded names no longer belong to the same
+ * score cluster. This is the immutable domain equivalent of the legacy
+ * score-edit cleanup.
+ */
+export function invalidateStaleTieResolutions(
+  state: TournamentState,
+  roundIndex: number,
+  room: number,
+): TournamentState {
+  const round = state.rounds[roundIndex];
+  if (!round) return state;
+  const currentTies = detectTieBreaks(roundIndex, round, state);
+  const prefix = `r${roundIndex}-rm${room}-`;
+  const tieResolutions = { ...state.tieResolutions };
+  let changed = false;
+  for (const key of Object.keys(tieResolutions)) {
+    if (!key.startsWith(prefix)) continue;
+    const cluster = currentTies[key];
+    const resolved = tieResolutionList(state, key);
+    const stillValid = Boolean(
+      cluster &&
+        resolved.every((name) =>
+          cluster.players.some((player) => player.name === name),
+        ),
+    );
+    if (!stillValid) {
+      delete tieResolutions[key];
+      changed = true;
+    }
+  }
+  return changed ? { ...state, tieResolutions } : state;
+}
+
 export function detectQualCutoffTie(
   state: Pick<TournamentState, "qualTable" | "cfg">,
 ): CutoffTieCluster | null {

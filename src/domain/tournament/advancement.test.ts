@@ -11,6 +11,7 @@ import {
   detectTieBreaks,
   doubleEliminationComputeAdvancement,
   isTieResolved,
+  invalidateStaleTieResolutions,
   luckyLoserCandidate,
   orderRoomByScore,
   pickLuckyLosers,
@@ -101,6 +102,22 @@ describe("tie ordering", () => {
       },
     });
     expect(isTieResolved("r0-rm1-s90", ties["r0-rm1-s90"], tournament)).toBe(true);
+  });
+
+  it("invalidates a same-score decision when the tied identities change", () => {
+    const tournament = state();
+    const edited = {
+      ...tournament,
+      scores: {
+        ...tournament.scores,
+        "r0-rm1-p0": 90,
+        "r0-rm1-p1": 90,
+        "r0-rm1-p2": 100,
+      },
+    };
+    expect(
+      invalidateStaleTieResolutions(edited, 0, 1).tieResolutions,
+    ).toEqual({ "qual-cutoff": ["C"] });
   });
 });
 

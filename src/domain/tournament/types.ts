@@ -103,6 +103,12 @@ export interface RoundAssignment {
   isLucky?: boolean;
 }
 
+/** A double-elimination route before it is assigned to a physical room. */
+export interface PendingBracketSeed {
+  name: string;
+  isLucky?: boolean;
+}
+
 export interface TournamentStanding {
   name: string;
   totalFP: number | null;
@@ -167,7 +173,7 @@ export interface TournamentState {
   luckyLosers: string[][];
   byes: string[][];
   poolingByeCounts: Record<string, number>;
-  pendingBracketSeeds: Record<string, RoundAssignment[]>;
+  pendingBracketSeeds: Record<string, PendingBracketSeed[]>;
   qualTable: TournamentStanding[];
   groups: TournamentGroup[];
   groupStandings: Record<string, TournamentStanding[]>;

@@ -62,8 +62,8 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Empty versus zero scores and negative/large values.
 - [x] Member sum and defender-only derived team scores.
 - [x] Fair Points ordering and stable tie clusters.
-- [ ] Ordinary tie resolution and invalidation after score edit.
-- [ ] Qualification cutoff tie and Group Stage cutoff tie.
+- [x] Ordinary tie resolution and invalidation after score edit.
+- [x] Qualification cutoff tie and Group Stage cutoff tie.
 - [ ] Lucky-loser calculation and display.
 - [x] Pure lucky-loser candidate ratios/selection and zero-total exclusion.
 - [x] Ordinary and WB/LB direct-advancer, loser, and lucky-loser splits.
@@ -72,7 +72,7 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Qualification and Group Stage cutoff detection and independent ordering.
 - [x] Cumulative Qualification/Swiss and per-group Fair Points standings,
   including qualifier seeding by finish tier across groups.
-- [ ] Multiple byes and pooling bye rotation.
+- [x] Multiple byes and pooling bye rotation.
 - [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
 - [x] Deterministic snake/Fisher-Yates seeding and best-effort same-group swap.
 - [x] Swiss fold pairing with odd-field bye rotation and a resolvable local
@@ -82,7 +82,7 @@ assignments, byes, pending seeds, and relevant validation text.
 - [x] Known single-game Final completion failure and multi-game tab failure.
 - [ ] Multi-game Semis/Final totals and incomplete-game behavior after the known
   tab defect is explicitly resolved or preserved.
-- [ ] Grand Final race completion for both target sides.
+- [x] Grand Final race completion for both target sides.
 - [x] Pure Grand Final race counting with a tied game, winner-side completion,
   and the undecided open-next-game condition.
 - [x] Fixed multi-game Final totals, completeness, next-game selection, and

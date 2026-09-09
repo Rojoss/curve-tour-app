@@ -3,6 +3,7 @@ import {
   computeGrandFinalRaceState,
   createEmptyTournamentState,
   finalsProgressState,
+  progressGrandFinalRace,
   shouldOpenNextGrandFinalGame,
   type TournamentRound,
 } from "./index";
@@ -55,6 +56,42 @@ describe("Grand Final race state", () => {
         oneGame,
       ),
     ).toBe(false);
+    expect(progressGrandFinalRace(state)).toMatchObject({
+      inProgress: true,
+      openedNextGame: true,
+      state: { rounds: [{ numGames: 2 }] },
+    });
+    expect(
+      progressGrandFinalRace({
+        ...state,
+        finalScores: { "game1-WB": 10 },
+      }),
+    ).toMatchObject({ inProgress: true, openedNextGame: false });
+  });
+
+  it("ends the race when the losers-side finalist reaches its target", () => {
+    const threeGames = { ...grandFinal, numGames: 3 };
+    const state = createEmptyTournamentState({
+      rounds: [threeGames],
+      assignments: [[{ name: "WB", room: 1 }, { name: "LB", room: 1 }]],
+      gamemodeConfig: { grandFinalWbTarget: 2, grandFinalLbTarget: 3 },
+      finalScores: {
+        "game1-WB": 1, "game1-LB": 2,
+        "game2-WB": 1, "game2-LB": 2,
+        "game3-WB": 1, "game3-LB": 2,
+      },
+    });
+    expect(computeGrandFinalRaceState(state, 0, threeGames)).toMatchObject({
+      wbWins: 0,
+      lbWins: 3,
+      decided: true,
+      winnerName: "LB",
+    });
+    expect(progressGrandFinalRace(state)).toMatchObject({
+      state,
+      inProgress: false,
+      openedNextGame: false,
+    });
   });
 });
 

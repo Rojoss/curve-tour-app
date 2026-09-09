@@ -12,4 +12,5 @@ export * from "./schedule-generation";
 export * from "./scoring";
 export * from "./seeding";
 export * from "./single-elimination";
+export * from "./transitions";
 export * from "./types";

@@ -38,7 +38,7 @@
      and Final schedule generation.
    - [x] Race-style head-to-head double-elimination topology.
    - [x] Shared-Final FFA/team double-elimination topology.
-4. [ ] Advancement, ties, byes, double-elimination routing, and rankings.
+4. [x] Advancement, ties, byes, double-elimination routing, and rankings.
    - [x] Room tie detection/order, legacy resolution normalization,
      qualification/group cutoff ties, and lucky-loser selection primitives.
    - [x] Cumulative Qualification, Swiss, and Group Stage standings.
@@ -46,12 +46,12 @@
      pooling-bye rotation, and Swiss fold/rematch handling.
    - [x] Ordinary and double-elimination room advancement selection, including
      resolved ordering and cross-room lucky losers.
-   - [ ] Round advancement, bye rotation, seeding, and WB/LB pending routes.
+   - [x] Round advancement, bye rotation, seeding, and WB/LB pending routes.
    - [x] Fixed-game Final progress and Grand Final race calculation/open-next
      decision.
    - [x] Tournament rankings for active, finalist, ordinary-elimination, and
      double-elimination states.
-   - [ ] Grand Final and round state-transition integration.
+   - [x] Grand Final and round state-transition integration.
 5. [ ] Browser persistence and backwards-compatible normalization.
 6. [ ] Shell, navigation, authentication modal, and setup UI.
 7. [ ] Roster management, preview, and running Admin UI.
