@@ -56,7 +56,7 @@
 6. [x] Shell, navigation, authentication modal, and setup UI.
 7. [x] Roster management, preview, and running Admin UI.
 8. [x] Scoreboard and Rankings UI.
-9. [ ] Bracket UI, follow/collapse behavior, and direct score entry.
+9. [x] Bracket UI, follow/collapse behavior, and direct score entry.
 10. [ ] Archive UI, JSON transfer, annotations, and PNG downloads.
 11. [ ] Firebase viewer/writer transport and concurrent merge behavior.
 12. [ ] Full parity matrix, deployment preview, rollback rehearsal, and cutover.

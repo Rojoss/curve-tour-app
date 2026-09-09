@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ActiveTab } from "../../domain/tournament";
 import { AdminPasswordModal } from "../auth/AdminPasswordModal";
+import { BracketView } from "../bracket/BracketView";
 import { SetupView } from "../admin/SetupView";
 import { RunningAdmin } from "../admin/RunningAdmin";
 import { RankingsView } from "../rankings/RankingsView";
@@ -76,11 +77,7 @@ export function AppShell() {
         {app.activeTab === "scoreboard" ? (
           <section id="view-scoreboard"><ScoreboardView /></section>
         ) : null}
-        {app.activeTab === "bracket" ? (
-          <section id="view-bracket">
-            <EmptyView>{app.state.started ? "Tournament bracket is loading." : "Start a tournament in Admin to see the bracket overview."}</EmptyView>
-          </section>
-        ) : null}
+        <section id="view-bracket" hidden={app.activeTab !== "bracket"}><BracketView /></section>
         {app.activeTab === "rankings" ? (
           <section id="view-rankings"><RankingsView /></section>
         ) : null}

@@ -33,6 +33,7 @@ import {
   type TournamentTeam,
 } from "../../domain/tournament";
 import { useTournamentApp } from "../tournament/TournamentProvider";
+import { saveBracketFollow } from "../../lib/persistence";
 
 function phaseLabel(state: TournamentState) {
   const round = state.rounds[state.curRound];
@@ -439,7 +440,10 @@ export function RunningAdmin() {
         {state.curRound > 0 ? <button className="btn btn-secondary" onClick={() => app.updateState((current) => ({ ...current, curRound: current.curRound - 1 }))}>← Previous</button> : null}
         <button className="btn btn-purple" onClick={() => setMessage("Archive saving is available in the Archive migration slice.")}>💾 Save to Archive</button>
         <button className="btn btn-secondary" onClick={() => {
-          if (window.confirm("Reset the full tournament? All scores will be lost.")) app.updateState(resetTournamentState(state));
+          if (window.confirm("Reset the full tournament? All scores will be lost.")) {
+            saveBracketFollow(window.localStorage, null);
+            app.updateState(resetTournamentState(state));
+          }
         }}>↺ Reset</button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 export * from "./advancement";
+export * from "./bracket";
 export * from "./fixtures";
 export * from "./double-elimination";
 export * from "./formats";
