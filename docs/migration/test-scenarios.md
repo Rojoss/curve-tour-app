@@ -1,0 +1,109 @@
+# Characterization and acceptance scenarios
+
+Legend: `[x]` automated baseline exists, `[ ]` still required, `[manual]` needs
+an isolated service or human review.
+
+## Shell, navigation, and authentication
+
+- [x] Fresh load opens Bracket and shows its empty state.
+- [x] Locked Admin opens a focused password dialog; cancel preserves Bracket.
+- [x] An already-unlocked browser exposes baseline configuration defaults.
+- [x] Unavailable-sync response fails closed and preserves the locked state.
+- [ ] Wrong-password server rejection.
+- [x] Lock clears the browser marker/proof and returns to Bracket.
+- [ ] Successful automated lock and unlock round trip against an isolated service.
+- [ ] Shared viewer promotion to writer.
+- [ ] Narrow viewport navigation and focus behavior.
+
+## Deterministic algorithm matrix
+
+For each applicable row, cover minimum, normal, odd, near-cap, and override
+boundaries. Fix random seed, clock, and ID generator.
+
+- [ ] FFA × single elimination × none/qualification/Swiss/group.
+- [ ] FFA × shared-final double elimination × every pooling phase.
+- [ ] 2v2v2v2 × both compatible schedule logics × every pooling phase.
+- [ ] 3v3v3 × both compatible schedule logics × every pooling phase.
+- [ ] 3v3 × single/race-double × none/bye/flex × every pooling phase.
+- [ ] 1v1 × single/race-double × none/bye × every pooling phase.
+- [ ] Physical room-cap validation at 10 and rejection above 10.
+- [ ] Semis/Final sizes and 1–4 game combinations.
+- [ ] WB/LB target races and shared-Final LB qualifier boundaries.
+
+Each fixture should contain selected setup, normalized roster, generated rounds,
+assignments, byes, pending seeds, and relevant validation text.
+
+## Roster and tournament management
+
+- [x] Sixteen-player individual roster loads and generates a preview.
+- [ ] Blank lines, whitespace, duplicate individual names.
+- [x] Baseline 3-member team parsing, optional user IDs, and missing-slot padding.
+- [ ] Team parsing for 2-member formats, duplicate team names, and empty teams.
+- [ ] Reserve team and individual-member reserve parsing.
+- [ ] Add/remove reserve and walk-up under valid and invalid room shapes.
+- [ ] Rename individual, team, and member with completed history.
+- [ ] Swap current individual and whole team.
+- [ ] Vacate/fill team member and change designated defender.
+- [ ] Group Stage reserve prohibition.
+- [ ] Reserve-window closure after first elimination.
+
+## Scoring and progression
+
+- [ ] Empty versus zero scores and negative/large values.
+- [ ] Member sum and defender-only derived team scores.
+- [ ] Fair Points ordering and stable tie clusters.
+- [ ] Ordinary tie resolution and invalidation after score edit.
+- [ ] Qualification cutoff tie and Group Stage cutoff tie.
+- [ ] Lucky-loser calculation and display.
+- [ ] Multiple byes and pooling bye rotation.
+- [ ] Swiss rematch avoidance and unavoidable-rematch fallback.
+- [ ] Same-group avoidance entering the bracket.
+- [ ] Every WB/LB routing transition including non-adjacent pending seeds.
+- [x] Known single-game Final completion failure and multi-game tab failure.
+- [ ] Multi-game Semis/Final totals and incomplete-game behavior after the known
+  tab defect is explicitly resolved or preserved.
+- [ ] Grand Final race completion for both target sides.
+- [ ] Final rankings for finalist, eliminated, bye, tie-break, and team cases.
+
+## Persistence and archives
+
+- [ ] Reload each setup field and active tab.
+- [x] Reload running tournament, scores, title, active tab, and advance afterward.
+- [ ] Viewer proves it never writes `curveFFA_state_v1`.
+- [ ] Pre-pooling `setup.qual` fallback.
+- [ ] Missing tournament-ID fallback.
+- [ ] Historical team-roster normalization and null slots.
+- [ ] Archive create, overwrite, save-as-new, title collision, and annotation
+  preservation.
+- [ ] Auto-save exactly once at completion.
+- [ ] Single and bundle export/import round trips.
+- [ ] Valid, invalid, oversized, duplicate-ID, and duplicate-tournament imports.
+- [ ] Archive deletion and annotation deletion confirmations.
+- [ ] Live and archived rankings PNG downloads have valid dimensions/content.
+
+## Synchronization
+
+- [x] Local-only setup, generation, scoring, viewer navigation, reload, and
+  advancement with Firebase fully blocked.
+- [ ] Null sentinel round trip.
+- [ ] Writer debounce and successful push status.
+- [ ] Viewer waiting, initial state, update, and stale-connection behavior.
+- [ ] Different-field concurrent writer edits merge.
+- [ ] Dirty local score survives an older remote payload.
+- [ ] Same-field edits are last-write-wins.
+- [ ] Listener teardown on reset and tournament change.
+- [manual] Repeat all networked cases using an isolated Firebase test project.
+
+## Visual baselines
+
+Capture desktop and 390 px-wide screenshots for:
+
+- [ ] Every empty view.
+- [ ] Admin setup for each format and conditional field combination.
+- [ ] Preview, running Admin, tie banner, reserves, and multi-game entry.
+- [ ] Qualification, Swiss, and grouped standings.
+- [ ] Scoreboard, collapsed/expanded bracket, followed player, and rankings.
+- [ ] Archive list/detail and every modal/error state.
+
+Visual snapshots are regression signals, not permission to reproduce invalid or
+inaccessible markup. Accessibility corrections must be documented as intentional.

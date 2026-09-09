@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: Inter, "Segoe UI", sans-serif;
+    color: #e8edf5;
+    background: #0d0f14;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+  }
+}
+
+.migration-shell {
+  width: min(720px, calc(100% - 40px));
+  margin: 15vh auto 0;
+  padding: 32px;
+  border: 1px solid #252d3d;
+  border-radius: 10px;
+  background: #161b24;
+}
+
+.migration-shell h1 {
+  margin: 8px 0 16px;
+  color: #00e5ff;
+}
+
+.migration-shell p {
+  color: #aab5ca;
+  line-height: 1.6;
+}
+
+.migration-shell code {
+  color: #e8edf5;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
