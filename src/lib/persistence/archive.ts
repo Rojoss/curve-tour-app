@@ -1,9 +1,6 @@
-import {
-  LEGACY_ARCHIVE_ENTRY_PREFIX,
-  LEGACY_ARCHIVE_INDEX_KEY,
-  type TournamentState,
-} from "../../domain/tournament";
-import type { BrowserStorage } from "./storage";
+import type { TournamentState } from '../../domain/tournament/types';
+import type { BrowserStorage } from './storage';
+import { archiveEntryStorageKey, LEGACY_ARCHIVE_INDEX_KEY } from './storage-keys';
 
 export const ARCHIVE_IMPORT_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -37,7 +34,7 @@ export interface ArchiveBundle {
 
 export function loadArchiveIndex(storage: BrowserStorage): ArchiveSummary[] {
   try {
-    const value = JSON.parse(storage.getItem(LEGACY_ARCHIVE_INDEX_KEY) ?? "[]");
+    const value = JSON.parse(storage.getItem(LEGACY_ARCHIVE_INDEX_KEY) ?? '[]');
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
@@ -50,14 +47,14 @@ export function saveArchiveIndex(storage: BrowserStorage, index: ArchiveSummary[
 
 export function loadArchiveEntry(storage: BrowserStorage, id: string): ArchiveEntry | null {
   try {
-    return JSON.parse(storage.getItem(`${LEGACY_ARCHIVE_ENTRY_PREFIX}${id}`) ?? "null") as ArchiveEntry | null;
+    return JSON.parse(storage.getItem(archiveEntryStorageKey(id)) ?? 'null') as ArchiveEntry | null;
   } catch {
     return null;
   }
 }
 
 export function saveArchiveEntry(storage: BrowserStorage, entry: ArchiveEntry): void {
-  storage.setItem(`${LEGACY_ARCHIVE_ENTRY_PREFIX}${entry.id}`, JSON.stringify(entry));
+  storage.setItem(archiveEntryStorageKey(entry.id), JSON.stringify(entry));
 }
 
 export function buildArchiveSummary(entry: ArchiveEntry): ArchiveSummary {
@@ -78,7 +75,7 @@ export function findLatestArchiveEntryForTournament(
   if (!tournamentId) return undefined;
   const matches = index.filter((entry) => entry.tournamentId === tournamentId);
   return matches.reduce<ArchiveSummary | undefined>(
-    (latest, entry) => !latest || new Date(entry.dateSaved) > new Date(latest.dateSaved) ? entry : latest,
+    (latest, entry) => (!latest || new Date(entry.dateSaved) > new Date(latest.dateSaved) ? entry : latest),
     undefined,
   );
 }
@@ -91,7 +88,7 @@ export function writeArchiveSnapshot(options: {
   keepAnnotations?: boolean;
 }): ArchiveEntry {
   const { storage, state, id, dateSaved, keepAnnotations = false } = options;
-  const title = state.title.trim() || "Unnamed Tournament";
+  const title = state.title.trim() || 'Unnamed Tournament';
   const previous = keepAnnotations ? loadArchiveEntry(storage, id) : null;
   const entry: ArchiveEntry = {
     id,
@@ -112,8 +109,11 @@ export function writeArchiveSnapshot(options: {
 }
 
 export function deleteArchive(storage: BrowserStorage, id: string): void {
-  storage.removeItem(`${LEGACY_ARCHIVE_ENTRY_PREFIX}${id}`);
-  saveArchiveIndex(storage, loadArchiveIndex(storage).filter((entry) => String(entry.id) !== String(id)));
+  storage.removeItem(archiveEntryStorageKey(id));
+  saveArchiveIndex(
+    storage,
+    loadArchiveIndex(storage).filter((entry) => String(entry.id) !== String(id)),
+  );
 }
 
 export function updateArchiveAnnotations(
@@ -138,43 +138,52 @@ export function archiveBundle(storage: BrowserStorage, exportedAt: string): Arch
 }
 
 export function isValidArchiveImportEntry(raw: unknown): raw is ArchiveEntry {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const candidate = raw as Partial<ArchiveEntry>;
   if (candidate.id === undefined || candidate.id === null) return false;
   const snapshot = candidate.snapshot as Partial<TournamentState> | undefined;
   return Boolean(
     snapshot &&
-      typeof snapshot === "object" &&
-      !Array.isArray(snapshot) &&
-      Array.isArray(snapshot.players) &&
-      Array.isArray(snapshot.rounds) &&
-      Array.isArray(snapshot.assignments),
+    typeof snapshot === 'object' &&
+    !Array.isArray(snapshot) &&
+    Array.isArray(snapshot.players) &&
+    Array.isArray(snapshot.rounds) &&
+    Array.isArray(snapshot.assignments),
   );
 }
 
 export type ParsedArchiveImport =
-  | { status: "valid"; entries: ArchiveEntry[]; isBundle: boolean; invalid: number }
-  | { status: "invalid-json" }
-  | { status: "invalid-shape" }
-  | { status: "empty-bundle" };
+  | { status: 'valid'; entries: ArchiveEntry[]; isBundle: boolean; invalid: number }
+  | { status: 'invalid-json' }
+  | { status: 'invalid-shape' }
+  | { status: 'empty-bundle' };
 
 export function parseArchiveImport(text: string): ParsedArchiveImport {
   let data: unknown;
-  try { data = JSON.parse(text); } catch { return { status: "invalid-json" }; }
-  if (data && typeof data === "object" && !Array.isArray(data) && Array.isArray((data as { tournaments?: unknown }).tournaments)) {
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { status: 'invalid-json' };
+  }
+  if (
+    data &&
+    typeof data === 'object' &&
+    !Array.isArray(data) &&
+    Array.isArray((data as { tournaments?: unknown }).tournaments)
+  ) {
     const raws = (data as { tournaments: unknown[] }).tournaments;
-    if (!raws.length) return { status: "empty-bundle" };
+    if (!raws.length) return { status: 'empty-bundle' };
     const entries = raws.filter(isValidArchiveImportEntry);
     return entries.length
-      ? { status: "valid", entries, isBundle: true, invalid: raws.length - entries.length }
-      : { status: "invalid-shape" };
+      ? { status: 'valid', entries, isBundle: true, invalid: raws.length - entries.length }
+      : { status: 'invalid-shape' };
   }
   return isValidArchiveImportEntry(data)
-    ? { status: "valid", entries: [data], isBundle: false, invalid: 0 }
-    : { status: "invalid-shape" };
+    ? { status: 'valid', entries: [data], isBundle: false, invalid: 0 }
+    : { status: 'invalid-shape' };
 }
 
-export type ArchiveImportMode = "overwrite" | "new" | "skip";
+export type ArchiveImportMode = 'overwrite' | 'new' | 'skip';
 export interface ArchiveImportCounts {
   added: number;
   overwritten: number;
@@ -185,7 +194,7 @@ export interface ArchiveImportCounts {
 }
 
 function validArchiveDate(value: unknown, fallback: string): string {
-  return typeof value === "string" && value && !Number.isNaN(new Date(value).getTime()) ? value : fallback;
+  return typeof value === 'string' && value && !Number.isNaN(new Date(value).getTime()) ? value : fallback;
 }
 
 export function runArchiveImport(options: {
@@ -197,32 +206,53 @@ export function runArchiveImport(options: {
 }): ArchiveImportCounts {
   const { storage, entries, mode, now, mintId } = options;
   const index = loadArchiveIndex(storage);
-  const counts: ArchiveImportCounts = { added: 0, overwritten: 0, skippedDup: 0, failed: 0, lastTitle: null, mode };
+  const counts: ArchiveImportCounts = {
+    added: 0,
+    overwritten: 0,
+    skippedDup: 0,
+    failed: 0,
+    lastTitle: null,
+    mode,
+  };
   for (let position = 0; position < entries.length; position += 1) {
     const raw = entries[position];
     const existingIndex = index.findIndex((entry) => String(entry.id) === String(raw.id));
     let id = String(raw.id);
     let overwrite = false;
-    if (existingIndex >= 0 && mode === "skip") { counts.skippedDup += 1; continue; }
-    if (existingIndex >= 0 && mode === "new") id = mintId(index);
-    if (existingIndex >= 0 && mode === "overwrite") overwrite = true;
-    const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : "Unnamed Tournament";
+    if (existingIndex >= 0 && mode === 'skip') {
+      counts.skippedDup += 1;
+      continue;
+    }
+    if (existingIndex >= 0 && mode === 'new') id = mintId(index);
+    if (existingIndex >= 0 && mode === 'overwrite') overwrite = true;
+    const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : 'Unnamed Tournament';
     const snapshot = raw.snapshot;
     const entry: ArchiveEntry = {
       id,
       title,
       dateSaved: validArchiveDate(raw.dateSaved, now),
-      tournamentId: snapshot.tournamentId !== undefined ? snapshot.tournamentId : raw.tournamentId ?? null,
+      tournamentId: snapshot.tournamentId !== undefined ? snapshot.tournamentId : (raw.tournamentId ?? null),
       snapshot,
       annotations: Array.isArray(raw.annotations) ? raw.annotations : [],
     };
-    try { saveArchiveEntry(storage, entry); } catch { counts.failed = entries.length - position; break; }
+    try {
+      saveArchiveEntry(storage, entry);
+    } catch {
+      counts.failed = entries.length - position;
+      break;
+    }
     const summary = buildArchiveSummary(entry);
     const target = index.findIndex((item) => String(item.id) === id);
-    if (target < 0) index.push(summary); else index[target] = summary;
-    if (overwrite) counts.overwritten += 1; else counts.added += 1;
+    if (target < 0) index.push(summary);
+    else index[target] = summary;
+    if (overwrite) counts.overwritten += 1;
+    else counts.added += 1;
     counts.lastTitle = title;
   }
-  try { saveArchiveIndex(storage, index); } catch { /* mirrors legacy best effort */ }
+  try {
+    saveArchiveIndex(storage, index);
+  } catch {
+    /* mirrors legacy best effort */
+  }
   return counts;
 }

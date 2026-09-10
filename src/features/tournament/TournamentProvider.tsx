@@ -7,28 +7,22 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from "react";
-import {
-  computeRankings,
-  createEmptyTournamentState,
-  createLegacySetupFixture,
-  createTournamentRuntime,
-  type ActiveTab,
-  type PersistedSetup,
-  type TournamentRuntime,
-  type TournamentState,
-} from "../../domain/tournament";
+} from 'react';
+import { computeRankings } from '../../domain/tournament/rankings';
+import { createDefaultSetup, createDefaultTournamentState } from '../../domain/tournament/state-defaults';
+import { createTournamentRuntime, type TournamentRuntime } from '../../domain/tournament/runtime';
+import type { ActiveTab, PersistedSetup, TournamentState } from '../../domain/tournament/types';
 import {
   findLatestArchiveEntryForTournament,
-  loadLiveEnvelope,
   loadArchiveIndex,
-  saveLiveEnvelope,
   writeArchiveSnapshot,
-  normalizeLiveTournamentState,
-} from "../../lib/persistence";
-import { getFirebaseSyncTransport } from "../sync/firebase-client";
-import { SyncCoordinator, type SyncStatus, type SyncTransport } from "../sync/live-sync";
-import { useAuth } from "../auth/AuthProvider";
+} from '../../lib/persistence/archive';
+import { normalizeLiveTournamentState } from '../../lib/persistence/live-state';
+import { loadLiveEnvelope, saveLiveEnvelope } from '../../lib/persistence/storage';
+import { archiveEntryStorageKey } from '../../lib/persistence/storage-keys';
+import { getFirebaseSyncTransport } from '../sync/firebase-client';
+import { SyncCoordinator, type SyncStatus, type SyncTransport } from '../sync/live-sync';
+import { useAuth } from '../auth/AuthProvider';
 
 declare global {
   interface Window {
@@ -47,12 +41,8 @@ export interface TournamentAppContext {
   runtime: TournamentRuntime;
   syncStatus: SyncStatus;
   setActiveTab(tab: ActiveTab): void;
-  updateState(
-    updater: TournamentState | ((current: TournamentState) => TournamentState),
-  ): void;
-  updateSetup(
-    updater: PersistedSetup | ((current: PersistedSetup) => PersistedSetup),
-  ): void;
+  updateState(updater: TournamentState | ((current: TournamentState) => TournamentState)): void;
+  updateSetup(updater: PersistedSetup | ((current: PersistedSetup) => PersistedSetup)): void;
   unlockAdmin(): void;
   lockAdmin(): void;
 }
@@ -62,13 +52,13 @@ const Context = createContext<TournamentAppContext | null>(null);
 export function TournamentProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const runtime = useMemo(() => createTournamentRuntime(), []);
-  const [state, setState] = useState(createEmptyTournamentState);
-  const [setup, setSetup] = useState(createLegacySetupFixture);
-  const [activeTab, setActiveTabState] = useState<ActiveTab>("bracket");
+  const [state, setState] = useState(createDefaultTournamentState);
+  const [setup, setSetup] = useState(createDefaultSetup);
+  const [activeTab, setActiveTabState] = useState<ActiveTab>('bracket');
   const [hydrated, setHydrated] = useState(false);
   const [isViewer, setIsViewer] = useState(false);
   const [viewTournamentId, setViewTournamentId] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: "idle" });
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: 'idle' });
   const sync = useRef<SyncCoordinator | null>(null);
   const stateRef = useRef(state);
   const setupRef = useRef(setup);
@@ -80,21 +70,21 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   isViewerRef.current = isViewer;
 
   useEffect(() => {
-    const queryId = new URLSearchParams(window.location.search).get("t");
-    window.localStorage.removeItem("curveFFA_admin_unlocked");
-    window.localStorage.removeItem("curveFFA_admin_proof_hash");
+    const queryId = new URLSearchParams(window.location.search).get('t');
+    window.localStorage.removeItem('curveFFA_admin_unlocked');
+    window.localStorage.removeItem('curveFFA_admin_proof_hash');
     const viewer = Boolean(queryId) && !auth.canAdmin;
-    let loadedState = createEmptyTournamentState();
-    let loadedSetup = createLegacySetupFixture();
-    let loadedTab: ActiveTab = "bracket";
+    let loadedState = createDefaultTournamentState();
+    let loadedSetup = createDefaultSetup();
+    let loadedTab: ActiveTab = 'bracket';
     if (!viewer) {
       const loaded = loadLiveEnvelope(window.localStorage, runtime.ids);
-      if (loaded.status === "loaded") {
+      if (loaded.status === 'loaded') {
         loadedState = loaded.envelope.T;
         loadedSetup = loaded.envelope.setup;
         loadedTab = loaded.envelope.activeTab;
-      } else if (loaded.status === "invalid") {
-        console.warn("Could not restore saved tournament state", loaded.error);
+      } else if (loaded.status === 'invalid') {
+        console.warn('Could not restore saved tournament state', loaded.error);
       }
       if (queryId && queryId !== loadedState.tournamentId) {
         loadedState = { ...loadedState, tournamentId: queryId };
@@ -104,27 +94,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     setState(loadedState);
     setSetup(loadedSetup);
-    setActiveTabState(viewer ? "bracket" : loadedTab);
+    setActiveTabState(viewer ? 'bracket' : loadedTab);
     setIsViewer(viewer);
     setViewTournamentId(queryId);
     setHydrated(true);
   }, [runtime]);
 
   const persist = useCallback(
-    (
-      nextState: TournamentState,
-      nextSetup: PersistedSetup,
-      nextTab: ActiveTab,
-      viewer = isViewer,
-    ) => {
-      if (typeof window === "undefined") return;
+    (nextState: TournamentState, nextSetup: PersistedSetup, nextTab: ActiveTab, viewer = isViewer) => {
+      if (typeof window === 'undefined') return;
       const result = saveLiveEnvelope(
         window.localStorage,
         { T: nextState, setup: nextSetup, activeTab: nextTab },
         { isViewer: viewer },
       );
-      if (result.status === "failed") {
-        console.warn("Could not save tournament state", result.error);
+      if (result.status === 'failed') {
+        console.warn('Could not save tournament state', result.error);
       }
     },
     [isViewer],
@@ -155,13 +140,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated || !sync.current) return;
-    sync.current.configure(auth.canAdmin && !isViewer ? "writer" : "viewer", state.tournamentId);
+    sync.current.configure(auth.canAdmin && !isViewer ? 'writer' : 'viewer', state.tournamentId);
   }, [auth.canAdmin, hydrated, isViewer, state.tournamentId]);
 
   useEffect(() => {
     if (!hydrated) return;
     if (!auth.canAdmin) {
-      if (activeTabRef.current === "admin") setActiveTabState("bracket");
+      if (activeTabRef.current === 'admin') setActiveTabState('bracket');
       if (viewTournamentId) setIsViewer(true);
       return;
     }
@@ -170,8 +155,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const next = { ...stateRef.current, tournamentId: viewTournamentId };
       stateRef.current = next;
       setState(next);
-      persist(next, setupRef.current, "admin", false);
-      setActiveTabState("admin");
+      persist(next, setupRef.current, 'admin', false);
+      setActiveTabState('admin');
     }
   }, [auth.canAdmin, hydrated, isViewer, persist, viewTournamentId]);
 
@@ -181,10 +166,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated || isViewer) return;
-    const url = state.tournamentId && state.started
-      ? `${window.location.pathname}?t=${encodeURIComponent(state.tournamentId)}`
-      : window.location.pathname;
-    window.history.replaceState(null, "", url);
+    const url =
+      state.tournamentId && state.started
+        ? `${window.location.pathname}?t=${encodeURIComponent(state.tournamentId)}`
+        : window.location.pathname;
+    window.history.replaceState(null, '', url);
   }, [hydrated, isViewer, state.started, state.tournamentId]);
 
   useEffect(() => {
@@ -195,7 +181,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const index = loadArchiveIndex(window.localStorage);
       const existing = findLatestArchiveEntryForTournament(index, state.tournamentId);
       let id = existing?.id ?? String(runtime.clock.now());
-      while (!existing && (index.some((entry) => String(entry.id) === id) || window.localStorage.getItem(`curveFFA_archive_${id}`) !== null)) {
+      while (
+        !existing &&
+        (index.some((entry) => String(entry.id) === id) ||
+          window.localStorage.getItem(archiveEntryStorageKey(id)) !== null)
+      ) {
         id = String(Number(id) + 1);
       }
       writeArchiveSnapshot({
@@ -209,9 +199,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setState(next);
       persist(next, setup, activeTab);
       sync.current?.updateLocal(state, next);
-      window.dispatchEvent(new CustomEvent("curve-tour:archive-status", { detail: "Tournament archived automatically." }));
+      window.dispatchEvent(
+        new CustomEvent('curve-tour:archive-status', { detail: 'Tournament archived automatically.' }),
+      );
     } catch (error) {
-      console.warn("Could not automatically archive completed tournament", error);
+      console.warn('Could not automatically archive completed tournament', error);
     }
   }, [activeTab, hydrated, isViewer, persist, runtime, setup, state]);
 
@@ -224,11 +216,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [persist, setup, state],
   );
   const updateState = useCallback(
-    (
-      updater: TournamentState | ((current: TournamentState) => TournamentState),
-    ) => {
+    (updater: TournamentState | ((current: TournamentState) => TournamentState)) => {
       setState((current) => {
-        const next = typeof updater === "function" ? updater(current) : updater;
+        const next = typeof updater === 'function' ? updater(current) : updater;
         persist(next, setup, activeTab);
         sync.current?.updateLocal(current, next);
         return next;
@@ -237,11 +227,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [activeTab, persist, setup],
   );
   const updateSetup = useCallback(
-    (
-      updater: PersistedSetup | ((current: PersistedSetup) => PersistedSetup),
-    ) => {
+    (updater: PersistedSetup | ((current: PersistedSetup) => PersistedSetup)) => {
       setSetup((current) => {
-        const next = typeof updater === "function" ? updater(current) : updater;
+        const next = typeof updater === 'function' ? updater(current) : updater;
         persist(state, next, activeTab);
         sync.current?.schedulePush();
         return next;
@@ -249,26 +237,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [activeTab, persist, state],
   );
-  const unlockAdmin = useCallback(
-    () => {
-      if (isViewer) {
-        setIsViewer(false);
-        const next = {
-          ...state,
-          tournamentId: viewTournamentId,
-        };
-        setState(next);
-        persist(next, setup, "admin", false);
-      }
-      setActiveTabState("admin");
-    },
-    [isViewer, persist, setup, state, viewTournamentId],
-  );
+  const unlockAdmin = useCallback(() => {
+    if (isViewer) {
+      setIsViewer(false);
+      const next = {
+        ...state,
+        tournamentId: viewTournamentId,
+      };
+      setState(next);
+      persist(next, setup, 'admin', false);
+    }
+    setActiveTabState('admin');
+  }, [isViewer, persist, setup, state, viewTournamentId]);
   const lockAdmin = useCallback(() => {
     auth.logout();
-    setActiveTabState("bracket");
+    setActiveTabState('bracket');
     if (viewTournamentId) setIsViewer(true);
-    persist(state, setup, "bracket");
+    persist(state, setup, 'bracket');
   }, [auth, persist, setup, state, viewTournamentId]);
 
   const value = useMemo<TournamentAppContext>(
@@ -310,6 +295,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
 export function useTournamentApp(): TournamentAppContext {
   const value = useContext(Context);
-  if (!value) throw new Error("useTournamentApp requires TournamentProvider.");
+  if (!value) throw new Error('useTournamentApp requires TournamentProvider.');
   return value;
 }

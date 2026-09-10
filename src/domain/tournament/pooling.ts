@@ -1,4 +1,4 @@
-import { distributeRooms, distributeRoomsWithBye } from "./room-distribution";
+import { distributeRooms, distributeRoomsWithBye } from './room-distribution';
 import type {
   GroupStageMatch,
   OddCountStrategyKey,
@@ -7,12 +7,12 @@ import type {
   RoundRobinMode,
   TournamentGroup,
   TournamentRound,
-} from "./types";
+} from './types';
 
 export const QUALIFICATION_ROUNDS = 3;
-export const MIN_SWISS_ROUNDS = 3;
-export const MAX_SWISS_ROUNDS = 7;
-export const IDEAL_GROUP_SIZE = 4;
+const MIN_SWISS_ROUNDS = 3;
+const MAX_SWISS_ROUNDS = 7;
+const IDEAL_GROUP_SIZE = 4;
 export const GROUP_SIZE_BOUNDS = {
   min: 3,
   max: 5,
@@ -41,13 +41,13 @@ export interface PoolingPhaseResult {
   groups?: TournamentGroup[];
 }
 
-export interface CircleMethodSchedule {
+interface CircleMethodSchedule {
   numRounds: number;
   phantomPosition: number | null;
   rounds: Array<Array<[number, number]>>;
 }
 
-export interface RoundRobinRound {
+interface RoundRobinRound {
   matches: GroupStageMatch[];
   byes: string[];
 }
@@ -55,18 +55,6 @@ export interface RoundRobinRound {
 export function computeSwissRoundCount(count: number): number {
   const ideal = count > 1 ? Math.ceil(Math.log2(count)) : 1;
   return Math.max(MIN_SWISS_ROUNDS, Math.min(ideal, MAX_SWISS_ROUNDS));
-}
-
-export function isStandingsRound(
-  round: Pick<TournamentRound, "isQual" | "isSwiss">,
-): boolean {
-  return Boolean(round.isQual || round.isSwiss);
-}
-
-export function isGroupStageRound(
-  round: Pick<TournamentRound, "isGroupStage">,
-): boolean {
-  return Boolean(round.isGroupStage);
 }
 
 function createPoolingRound(
@@ -91,25 +79,13 @@ function createPoolingRound(
 }
 
 export function qualificationTablePoolingPhase(
-  config: Pick<PoolingConfig, "n" | "qualAdv">,
-  format: Pick<
-    PoolingFormatConfig,
-    "roomSize" | "oddCountStrategy" | "qualRounds"
-  >,
+  config: Pick<PoolingConfig, 'n' | 'qualAdv'>,
+  format: Pick<PoolingFormatConfig, 'roomSize' | 'oddCountStrategy' | 'qualRounds'>,
 ): PoolingPhaseResult {
   const rounds = Array.from({ length: format.qualRounds }, (_, index) => {
-    const distribution = distributeRoomsWithBye(
-      config.n,
-      format.roomSize,
-      format.oddCountStrategy,
-    );
+    const distribution = distributeRoomsWithBye(config.n, format.roomSize, format.oddCountStrategy);
     return {
-      ...createPoolingRound(
-        index + 1,
-        config.n,
-        distribution.rooms,
-        distribution.byeCount,
-      ),
+      ...createPoolingRound(index + 1, config.n, distribution.rooms, distribution.byeCount),
       isQual: true,
     };
   });
@@ -121,25 +97,13 @@ export function qualificationTablePoolingPhase(
 }
 
 export function swissPoolingPhase(
-  config: Pick<PoolingConfig, "n" | "qualAdv">,
-  format: Pick<
-    PoolingFormatConfig,
-    "roomSize" | "oddCountStrategy" | "swissRounds"
-  >,
+  config: Pick<PoolingConfig, 'n' | 'qualAdv'>,
+  format: Pick<PoolingFormatConfig, 'roomSize' | 'oddCountStrategy' | 'swissRounds'>,
 ): PoolingPhaseResult {
   const rounds = Array.from({ length: format.swissRounds }, (_, index) => {
-    const distribution = distributeRoomsWithBye(
-      config.n,
-      format.roomSize,
-      format.oddCountStrategy,
-    );
+    const distribution = distributeRoomsWithBye(config.n, format.roomSize, format.oddCountStrategy);
     return {
-      ...createPoolingRound(
-        index + 1,
-        config.n,
-        distribution.rooms,
-        distribution.byeCount,
-      ),
+      ...createPoolingRound(index + 1, config.n, distribution.rooms, distribution.byeCount),
       isSwiss: true,
       ...(index > 0 ? { pairingTBD: true } : {}),
     };
@@ -151,12 +115,12 @@ export function swissPoolingPhase(
   };
 }
 
-export function circleMethodSchedule(groupSize: number): CircleMethodSchedule {
+function circleMethodSchedule(groupSize: number): CircleMethodSchedule {
   const isOdd = groupSize % 2 !== 0;
   const positionCount = isOdd ? groupSize + 1 : groupSize;
   const numRounds = positionCount - 1;
   let positions = Array.from({ length: positionCount }, (_, index) => index);
-  const rounds: CircleMethodSchedule["rounds"] = [];
+  const rounds: CircleMethodSchedule['rounds'] = [];
 
   for (let roundIndex = 0; roundIndex < numRounds; roundIndex += 1) {
     const pairs: Array<[number, number]> = [];
@@ -174,10 +138,7 @@ export function circleMethodSchedule(groupSize: number): CircleMethodSchedule {
   };
 }
 
-export function assignGroupMembers(
-  sortedUnits: string[],
-  groupSizes: number[],
-): TournamentGroup[] {
+function assignGroupMembers(sortedUnits: string[], groupSizes: number[]): TournamentGroup[] {
   const groups = groupSizes.map((_, index) => ({
     label: String.fromCharCode(65 + index),
     members: [] as string[],
@@ -204,22 +165,13 @@ export function assignGroupMembers(
   return groups;
 }
 
-export function buildRoundRobinRounds(
-  groups: TournamentGroup[],
-  roundRobinMode: RoundRobinMode,
-): RoundRobinRound[] {
+function buildRoundRobinRounds(groups: TournamentGroup[], roundRobinMode: RoundRobinMode): RoundRobinRound[] {
   const schedules = groups.map((group) => {
     const schedule = circleMethodSchedule(group.members.length);
-    const rounds =
-      roundRobinMode === "double"
-        ? [...schedule.rounds, ...schedule.rounds]
-        : schedule.rounds;
+    const rounds = roundRobinMode === 'double' ? [...schedule.rounds, ...schedule.rounds] : schedule.rounds;
     return { group, phantomPosition: schedule.phantomPosition, rounds };
   });
-  const maxRounds = schedules.reduce(
-    (maximum, schedule) => Math.max(maximum, schedule.rounds.length),
-    0,
-  );
+  const maxRounds = schedules.reduce((maximum, schedule) => Math.max(maximum, schedule.rounds.length), 0);
 
   return Array.from({ length: maxRounds }, (_, roundIndex) => {
     const matches: GroupStageMatch[] = [];
@@ -238,10 +190,7 @@ export function buildRoundRobinRounds(
         } else {
           matches.push({
             group: schedule.group.label,
-            pair: [
-              schedule.group.members[first],
-              schedule.group.members[second],
-            ],
+            pair: [schedule.group.members[first], schedule.group.members[second]],
           });
         }
       }
@@ -251,10 +200,7 @@ export function buildRoundRobinRounds(
 }
 
 export function groupStagePoolingPhase(
-  config: Pick<
-    PoolingConfig,
-    "n" | "groupSize" | "roundRobinMode" | "qualifiersPerGroup"
-  >,
+  config: Pick<PoolingConfig, 'n' | 'groupSize' | 'roundRobinMode' | 'qualifiersPerGroup'>,
   roster: string[],
 ): PoolingPhaseResult {
   const groupSizes = distributeRooms(config.n, {
@@ -286,7 +232,7 @@ export function groupStagePoolingPhase(
 }
 
 export function seedFromGroupStageRound(
-  round: Pick<TournamentRound, "matches" | "groupByes">,
+  round: Pick<TournamentRound, 'matches' | 'groupByes'>,
 ): RoundAssignment[] {
   const assignments: RoundAssignment[] = [];
   for (const [index, match] of (round.matches ?? []).entries()) {
@@ -302,21 +248,12 @@ export function seedFromGroupStageRound(
 }
 
 export function noEliminationWarmupPoolingPhase(
-  config: Pick<PoolingConfig, "n">,
-  format: Pick<PoolingFormatConfig, "roomSize" | "oddCountStrategy">,
+  config: Pick<PoolingConfig, 'n'>,
+  format: Pick<PoolingFormatConfig, 'roomSize' | 'oddCountStrategy'>,
 ): PoolingPhaseResult {
   const rounds = Array.from({ length: 2 }, (_, index) => {
-    const distribution = distributeRoomsWithBye(
-      config.n,
-      format.roomSize,
-      format.oddCountStrategy,
-    );
-    return createPoolingRound(
-      index + 1,
-      config.n,
-      distribution.rooms,
-      distribution.byeCount,
-    );
+    const distribution = distributeRoomsWithBye(config.n, format.roomSize, format.oddCountStrategy);
+    return createPoolingRound(index + 1, config.n, distribution.rooms, distribution.byeCount);
   });
   return { rounds, seedTotal: config.n, nextRoundNum: 3 };
 }

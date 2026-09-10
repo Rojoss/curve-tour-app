@@ -1,34 +1,24 @@
-import {
-  fairPoints,
-  getUnitScore,
-  groupByScore,
-  orderRoomByScore,
-  tieResolutionList,
-} from "./scoring";
-import { rosterKeys } from "./roster";
-import type {
-  TournamentRound,
-  TournamentStanding,
-  TournamentState,
-} from "./types";
+import { fairPoints, getUnitScore, groupByScore, orderRoomByScore, tieResolutionList } from './scoring';
+import { rosterKeys } from './roster';
+import type { TournamentRound, TournamentStanding, TournamentState } from './types';
 
-export interface ScoredUnit {
+interface ScoredUnit {
   name: string;
   score: number;
 }
 
-export interface LuckyLoserCandidate {
+interface LuckyLoserCandidate {
   name: string;
   pct: number;
 }
 
-export interface RoomTieCluster {
+interface RoomTieCluster {
   players: ScoredUnit[];
   rm: number;
   score: number;
 }
 
-export interface CutoffTieCluster {
+interface CutoffTieCluster {
   key: string;
   players: TournamentStanding[];
   fp: number;
@@ -36,10 +26,32 @@ export interface CutoffTieCluster {
   groupLabel?: string;
 }
 
-export function luckyLoserCandidate(
-  scored: ScoredUnit[],
-  advPerRoom: number,
-): LuckyLoserCandidate | null {
+function scoreRoom(
+  state: TournamentState,
+  roundIndex: number,
+  room: number,
+  fallback: number | null,
+): ScoredUnit[] {
+  return (state.assignments[roundIndex] ?? [])
+    .filter((assignment) => assignment.room === room)
+    .map((assignment, position) => ({
+      name: assignment.name,
+      score: getUnitScore(state, roundIndex, room, position, fallback),
+    }))
+    .filter((entry): entry is ScoredUnit => entry.score !== null);
+}
+
+function isLastStandingsRound(state: TournamentState, roundIndex: number): boolean {
+  const round = state.rounds[roundIndex];
+  const nextRound = state.rounds[roundIndex + 1];
+  return Boolean(
+    state.cfg.poolingPhase !== 'none' &&
+    (round?.isQual || round?.isSwiss) &&
+    !(nextRound?.isQual || nextRound?.isSwiss),
+  );
+}
+
+function luckyLoserCandidate(scored: ScoredUnit[], advPerRoom: number): LuckyLoserCandidate | null {
   const candidate = scored[advPerRoom];
   if (!candidate) return null;
   const roomTotal = scored.reduce((total, entry) => total + entry.score, 0);
@@ -47,10 +59,7 @@ export function luckyLoserCandidate(
   return { name: candidate.name, pct: candidate.score / roomTotal };
 }
 
-export function pickLuckyLosers(
-  candidates: LuckyLoserCandidate[],
-  luckyCount: number,
-): string[] {
+function pickLuckyLosers(candidates: LuckyLoserCandidate[], luckyCount: number): string[] {
   if (!luckyCount || candidates.length === 0) return [];
   return [...candidates]
     .sort((first, second) => second.pct - first.pct)
@@ -66,16 +75,9 @@ export function detectTieBreaks(
   if (round.isFinal) return {};
   const ties: Record<string, RoomTieCluster> = {};
   for (let room = 1; room <= round.rooms.length; room += 1) {
-    const assignments = (state.assignments[roundIndex] ?? []).filter(
-      (assignment) => assignment.room === room,
+    const scored = scoreRoom(state, roundIndex, room, null).sort(
+      (first, second) => second.score - first.score,
     );
-    const scored = assignments
-      .map((assignment, position) => ({
-        name: assignment.name,
-        score: getUnitScore(state, roundIndex, room, position, null),
-      }))
-      .filter((entry): entry is ScoredUnit => entry.score !== null)
-      .sort((first, second) => second.score - first.score);
     for (const cluster of groupByScore(scored)) {
       if (cluster.length < 2) continue;
       const key = `r${roundIndex}-rm${room}-s${cluster[0].score}`;
@@ -87,32 +89,25 @@ export function detectTieBreaks(
 
 export function isTieResolved(
   key: string,
-  cluster: Pick<RoomTieCluster, "players"> | Pick<CutoffTieCluster, "players">,
-  state: Pick<TournamentState, "tieResolutions">,
+  cluster: Pick<RoomTieCluster, 'players'> | Pick<CutoffTieCluster, 'players'>,
+  state: Pick<TournamentState, 'tieResolutions'>,
 ): boolean {
   return tieResolutionList(state, key).length >= cluster.players.length - 1;
 }
 
-export type TournamentTieCluster = RoomTieCluster | CutoffTieCluster;
+type TournamentTieCluster = RoomTieCluster | CutoffTieCluster;
 
 /**
  * Recompute the live cumulative tables that legacy `getAllTies` refreshes
  * before checking a last-pooling-round cutoff. Archive callers should pass
  * their frozen snapshot directly to `getAllTies` instead of calling this.
  */
-export function refreshRoundStandings(
-  state: TournamentState,
-  roundIndex: number,
-): TournamentState {
+export function refreshRoundStandings(state: TournamentState, roundIndex: number): TournamentState {
   const round = state.rounds[roundIndex];
   if (!round) return state;
   const nextRound = state.rounds[roundIndex + 1];
   let nextState = state;
-  if (
-    state.cfg.poolingPhase !== "none" &&
-    Boolean(round.isQual || round.isSwiss) &&
-    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss))
-  ) {
+  if (isLastStandingsRound(state, roundIndex)) {
     nextState = { ...nextState, qualTable: computeQualificationStandings(state) };
   }
   if (round.isGroupStage && !nextRound?.isGroupStage) {
@@ -125,21 +120,14 @@ export function refreshRoundStandings(
 }
 
 /** Collect every currently relevant room and standings-cutoff tie. */
-export function getAllTies(
-  state: TournamentState,
-  roundIndex: number,
-): Record<string, TournamentTieCluster> {
+export function getAllTies(state: TournamentState, roundIndex: number): Record<string, TournamentTieCluster> {
   const round = state.rounds[roundIndex];
   if (!round) return {};
   const ties: Record<string, TournamentTieCluster> = {
     ...detectTieBreaks(roundIndex, round, state),
   };
   const nextRound = state.rounds[roundIndex + 1];
-  const isLastStandingsRound =
-    state.cfg.poolingPhase !== "none" &&
-    Boolean(round.isQual || round.isSwiss) &&
-    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss));
-  if (isLastStandingsRound) {
+  if (isLastStandingsRound(state, roundIndex)) {
     const cutoff = detectQualCutoffTie(state);
     if (cutoff) ties[cutoff.key] = cutoff;
   }
@@ -152,10 +140,7 @@ export function getAllTies(
   return ties;
 }
 
-export function hasPendingTies(
-  state: TournamentState,
-  roundIndex: number,
-): boolean {
+export function hasPendingTies(state: TournamentState, roundIndex: number): boolean {
   return Object.entries(getAllTies(state, roundIndex)).some(
     ([key, cluster]) => !isTieResolved(key, cluster, state),
   );
@@ -182,10 +167,7 @@ export function invalidateStaleTieResolutions(
     const cluster = currentTies[key];
     const resolved = tieResolutionList(state, key);
     const stillValid = Boolean(
-      cluster &&
-        resolved.every((name) =>
-          cluster.players.some((player) => player.name === name),
-        ),
+      cluster && resolved.every((name) => cluster.players.some((player) => player.name === name)),
     );
     if (!stillValid) {
       delete tieResolutions[key];
@@ -195,28 +177,24 @@ export function invalidateStaleTieResolutions(
   return changed ? { ...state, tieResolutions } : state;
 }
 
-export function detectQualCutoffTie(
-  state: Pick<TournamentState, "qualTable" | "cfg">,
-): CutoffTieCluster | null {
+function detectQualCutoffTie(state: Pick<TournamentState, 'qualTable' | 'cfg'>): CutoffTieCluster | null {
   const table = state.qualTable.filter(
-    (entry): entry is TournamentStanding & { totalFP: number } =>
-      entry.totalFP !== null,
+    (entry): entry is TournamentStanding & { totalFP: number } => entry.totalFP !== null,
   );
   const qualifiers = state.cfg.qualAdv;
   if (!qualifiers || qualifiers >= table.length) return null;
   const boundary = table[qualifiers - 1].totalFP;
   const players = table.filter((entry) => entry.totalFP === boundary);
   if (players.length < 2) return null;
-  return { key: "qual-cutoff", players, fp: boundary, rm: null };
+  return { key: 'qual-cutoff', players, fp: boundary, rm: null };
 }
 
-export function detectGroupCutoffTie(
+function detectGroupCutoffTie(
   label: string,
-  state: Pick<TournamentState, "groupStandings" | "cfg">,
+  state: Pick<TournamentState, 'groupStandings' | 'cfg'>,
 ): CutoffTieCluster | null {
   const table = (state.groupStandings[label] ?? []).filter(
-    (entry): entry is TournamentStanding & { totalFP: number } =>
-      entry.totalFP !== null,
+    (entry): entry is TournamentStanding & { totalFP: number } => entry.totalFP !== null,
   );
   const qualifiers = state.cfg.qualifiersPerGroup;
   if (!qualifiers || qualifiers >= table.length) return null;
@@ -235,13 +213,11 @@ export function detectGroupCutoffTie(
 function applyCutoffOrder(
   table: TournamentStanding[],
   tie: CutoffTieCluster | null,
-  state: Pick<TournamentState, "tieResolutions">,
+  state: Pick<TournamentState, 'tieResolutions'>,
 ): TournamentStanding[] {
   if (!tie) return table;
   const resolved = tieResolutionList(state, tie.key);
-  const remaining = tie.players
-    .map((entry) => entry.name)
-    .filter((name) => !resolved.includes(name));
+  const remaining = tie.players.map((entry) => entry.name).filter((name) => !resolved.includes(name));
   const byName = new Map(tie.players.map((entry) => [entry.name, entry]));
   const output = [...table];
   const start = output.findIndex((entry) => entry.totalFP === tie.fp);
@@ -254,31 +230,19 @@ function applyCutoffOrder(
   return output;
 }
 
-export function applyQualCutoffOrder(
+function applyQualCutoffOrder(
   table: TournamentStanding[],
-  state: Pick<TournamentState, "qualTable" | "cfg" | "tieResolutions">,
+  state: Pick<TournamentState, 'qualTable' | 'cfg' | 'tieResolutions'>,
 ): TournamentStanding[] {
   return applyCutoffOrder(table, detectQualCutoffTie(state), state);
 }
 
-export function applyGroupCutoffOrder(
+function applyGroupCutoffOrder(
   label: string,
   table: TournamentStanding[],
-  state: Pick<
-    TournamentState,
-    "groupStandings" | "cfg" | "tieResolutions"
-  >,
+  state: Pick<TournamentState, 'groupStandings' | 'cfg' | 'tieResolutions'>,
 ): TournamentStanding[] {
   return applyCutoffOrder(table, detectGroupCutoffTie(label, state), state);
-}
-
-export function orderScoredRoom(
-  scored: ScoredUnit[],
-  roundIndex: number,
-  room: number,
-  state: Pick<TournamentState, "tieResolutions">,
-): ScoredUnit[] {
-  return orderRoomByScore(scored, roundIndex, room, state);
 }
 
 interface StandingAccumulator {
@@ -286,19 +250,12 @@ interface StandingAccumulator {
   rounds: Array<{ fp: number; score: number }>;
 }
 
-function materializeStandings(
-  entries: StandingAccumulator[],
-): TournamentStanding[] {
+function materializeStandings(entries: StandingAccumulator[]): TournamentStanding[] {
   return entries
     .map((entry) => ({
       name: entry.name,
-      totalFP: entry.rounds.length
-        ? entry.rounds.reduce((total, round) => total + round.fp, 0)
-        : null,
-      totalScore: entry.rounds.reduce(
-        (total, round) => total + round.score,
-        0,
-      ),
+      totalFP: entry.rounds.length ? entry.rounds.reduce((total, round) => total + round.fp, 0) : null,
+      totalScore: entry.rounds.reduce((total, round) => total + round.score, 0),
       played: entry.rounds.length,
     }))
     .sort((first, second) => {
@@ -309,26 +266,15 @@ function materializeStandings(
     });
 }
 
-export function computeQualificationStandings(
-  state: TournamentState,
-): TournamentStanding[] {
+export function computeQualificationStandings(state: TournamentState): TournamentStanding[] {
   const accumulators = new Map<string, StandingAccumulator>(
     rosterKeys(state.players).map((name) => [name, { name, rounds: [] }]),
   );
   for (const [roundIndex, round] of state.rounds.entries()) {
     if (!(round.isQual || round.isSwiss)) continue;
     for (let room = 1; room <= round.rooms.length; room += 1) {
-      const assignments = (state.assignments[roundIndex] ?? []).filter(
-        (assignment) => assignment.room === room,
-      );
-      const scored = assignments
-        .map((assignment, position) => ({
-          name: assignment.name,
-          score: getUnitScore(state, roundIndex, room, position, null),
-        }))
-        .filter((entry): entry is ScoredUnit => entry.score !== null);
       for (const [index, entry] of orderRoomByScore(
-        scored,
+        scoreRoom(state, roundIndex, room, null),
         roundIndex,
         room,
         state,
@@ -343,20 +289,10 @@ export function computeQualificationStandings(
   return materializeStandings([...accumulators.values()]);
 }
 
-export function computeGroupStandings(
-  state: TournamentState,
-): Record<string, TournamentStanding[]> {
-  const byGroup = new Map<
-    string,
-    Map<string, StandingAccumulator>
-  >();
+export function computeGroupStandings(state: TournamentState): Record<string, TournamentStanding[]> {
+  const byGroup = new Map<string, Map<string, StandingAccumulator>>();
   for (const group of state.groups) {
-    byGroup.set(
-      group.label,
-      new Map(
-        group.members.map((name) => [name, { name, rounds: [] }]),
-      ),
-    );
+    byGroup.set(group.label, new Map(group.members.map((name) => [name, { name, rounds: [] }])));
   }
 
   for (const [roundIndex, round] of state.rounds.entries()) {
@@ -364,38 +300,29 @@ export function computeGroupStandings(
     for (let room = 1; room <= round.rooms.length; room += 1) {
       const groupLabel = round.roomGroups?.[room - 1];
       if (!groupLabel) continue;
-      const assignments = (state.assignments[roundIndex] ?? []).filter(
-        (assignment) => assignment.room === room,
-      );
-      const scored = assignments
-        .map((assignment, position) => ({
-          name: assignment.name,
-          score: getUnitScore(state, roundIndex, room, position, null),
-        }))
-        .filter((entry): entry is ScoredUnit => entry.score !== null);
       for (const [index, entry] of orderRoomByScore(
-        scored,
+        scoreRoom(state, roundIndex, room, null),
         roundIndex,
         room,
         state,
       ).entries()) {
-        byGroup.get(groupLabel)?.get(entry.name)?.rounds.push({
-          fp: fairPoints(index + 1, entry.score),
-          score: entry.score,
-        });
+        byGroup
+          .get(groupLabel)
+          ?.get(entry.name)
+          ?.rounds.push({
+            fp: fairPoints(index + 1, entry.score),
+            score: entry.score,
+          });
       }
     }
   }
 
   return Object.fromEntries(
-    [...byGroup].map(([label, entries]) => [
-      label,
-      materializeStandings([...entries.values()]),
-    ]),
+    [...byGroup].map(([label, entries]) => [label, materializeStandings([...entries.values()])]),
   );
 }
 
-export function computeGroupStageAdvancement(state: TournamentState): {
+function computeGroupStageAdvancement(state: TournamentState): {
   advancing: Array<{ name: string; isLucky: false }>;
   luckyNames: null;
   groupStandings: Record<string, TournamentStanding[]>;
@@ -406,9 +333,7 @@ export function computeGroupStageAdvancement(state: TournamentState): {
   const perGroup = state.groups.map((group) =>
     applyGroupCutoffOrder(
       group.label,
-      (groupStandings[group.label] ?? []).filter(
-        (entry) => entry.totalFP !== null,
-      ),
+      (groupStandings[group.label] ?? []).filter((entry) => entry.totalFP !== null),
       stateWithStandings,
     ).slice(0, qualifiersPerGroup),
   );
@@ -417,10 +342,7 @@ export function computeGroupStageAdvancement(state: TournamentState): {
     const finishers = perGroup
       .map((qualifiers) => qualifiers[tier])
       .filter((entry): entry is TournamentStanding => Boolean(entry))
-      .sort(
-        (first, second) =>
-          (first.totalFP as number) - (second.totalFP as number),
-      );
+      .sort((first, second) => (first.totalFP as number) - (second.totalFP as number));
     for (const finisher of finishers) {
       advancing.push({ name: finisher.name, isLucky: false });
     }
@@ -428,88 +350,54 @@ export function computeGroupStageAdvancement(state: TournamentState): {
   return { advancing, luckyNames: null, groupStandings };
 }
 
-export interface AdvancementResult {
+interface AdvancementResult {
   advancing: Array<{ name: string; isLucky: boolean }>;
   luckyNames: string[] | null;
   qualTable?: TournamentStanding[];
   groupStandings?: Record<string, TournamentStanding[]>;
 }
 
-export function roomBasedComputeAdvancement(
-  state: TournamentState,
-  roundIndex: number,
-): AdvancementResult {
+export function roomBasedComputeAdvancement(state: TournamentState, roundIndex: number): AdvancementResult {
   const round = state.rounds[roundIndex];
   const nextRound = state.rounds[roundIndex + 1];
-  const isLastStandingsRound =
-    state.cfg.poolingPhase !== "none" &&
-    Boolean(round.isQual || round.isSwiss) &&
-    !Boolean(nextRound && (nextRound.isQual || nextRound.isSwiss));
-  if (isLastStandingsRound) {
+  if (isLastStandingsRound(state, roundIndex)) {
     const qualTable = computeQualificationStandings(state);
     const ordered = applyQualCutoffOrder(
       qualTable.filter((entry) => entry.totalFP !== null),
       { ...state, qualTable },
     );
     return {
-      advancing: ordered
-        .slice(0, state.cfg.qualAdv)
-        .map((entry) => ({ name: entry.name, isLucky: false })),
+      advancing: ordered.slice(0, state.cfg.qualAdv).map((entry) => ({ name: entry.name, isLucky: false })),
       luckyNames: null,
       qualTable,
     };
   }
 
-  if (
-    round.isGroupStage &&
-    !(nextRound && nextRound.isGroupStage)
-  ) {
+  if (round.isGroupStage && !nextRound?.isGroupStage) {
     return computeGroupStageAdvancement(state);
   }
 
   const direct: Array<{ name: string; isLucky: boolean }> = [];
   const luckyPool: LuckyLoserCandidate[] = [];
-  const assignments = state.assignments[roundIndex] ?? [];
   for (let room = 1; room <= round.rooms.length; room += 1) {
-    const players = assignments.filter((assignment) => assignment.room === room);
-    const advancingFromRoom = round.isNoElim
-      ? players.length
-      : (round.advPerRoom ?? 0);
-    const scored = orderRoomByScore(
-      players.map((player, position) => ({
-        name: player.name,
-        score: getUnitScore(state, roundIndex, room, position, 0) ?? 0,
-      })),
-      roundIndex,
-      room,
-      state,
-    );
+    const scored = orderRoomByScore(scoreRoom(state, roundIndex, room, 0), roundIndex, room, state);
+    const advancingFromRoom = round.isNoElim ? scored.length : (round.advPerRoom ?? 0);
     for (const entry of scored.slice(0, advancingFromRoom)) {
       direct.push({ name: entry.name, isLucky: false });
     }
-    if (
-      !round.isNoElim &&
-      round.luckyCount > 0 &&
-      scored.length > (round.advPerRoom ?? 0)
-    ) {
-      const candidate = luckyLoserCandidate(
-        scored,
-        round.advPerRoom ?? 0,
-      );
+    if (!round.isNoElim && round.luckyCount > 0 && scored.length > (round.advPerRoom ?? 0)) {
+      const candidate = luckyLoserCandidate(scored, round.advPerRoom ?? 0);
       if (candidate) luckyPool.push(candidate);
     }
   }
   const luckyNames = pickLuckyLosers(luckyPool, round.luckyCount);
   return {
-    advancing: [
-      ...direct,
-      ...luckyNames.map((name) => ({ name, isLucky: true })),
-    ],
+    advancing: [...direct, ...luckyNames.map((name) => ({ name, isLucky: true }))],
     luckyNames,
   };
 }
 
-export interface DoubleEliminationAdvancementResult {
+interface DoubleEliminationAdvancementResult {
   winners: Array<{ name: string }>;
   losers: Array<{ name: string }>;
   luckyNames: string[];
@@ -520,22 +408,12 @@ export function doubleEliminationComputeAdvancement(
   roundIndex: number,
 ): DoubleEliminationAdvancementResult {
   const round = state.rounds[roundIndex];
-  const assignments = state.assignments[roundIndex] ?? [];
   const direct: Array<{ name: string }> = [];
   const losers: Array<{ name: string }> = [];
   const luckyPool: LuckyLoserCandidate[] = [];
   const advancingFromRoom = round.advPerRoom ?? 0;
   for (let room = 1; room <= round.rooms.length; room += 1) {
-    const players = assignments.filter((assignment) => assignment.room === room);
-    const scored = orderRoomByScore(
-      players.map((player, position) => ({
-        name: player.name,
-        score: getUnitScore(state, roundIndex, room, position, 0) ?? 0,
-      })),
-      roundIndex,
-      room,
-      state,
-    );
+    const scored = orderRoomByScore(scoreRoom(state, roundIndex, room, 0), roundIndex, room, state);
     direct.push(...scored.slice(0, advancingFromRoom).map(({ name }) => ({ name })));
     losers.push(...scored.slice(advancingFromRoom).map(({ name }) => ({ name })));
     if (round.luckyCount > 0 && scored.length > advancingFromRoom) {

@@ -6,35 +6,19 @@ import {
   type PoolingConfig,
   type PoolingFormatConfig,
   type PoolingPhaseResult,
-} from "./pooling";
+} from './pooling';
 import {
   raceDoubleEliminationBracketPhase,
   sharedFinalDoubleEliminationBracketPhase,
   type RaceDoubleEliminationConfig,
   type SharedFinalDoubleEliminationConfig,
-} from "./double-elimination";
-import {
-  singleEliminationBracketPhase,
-  type SingleEliminationConfig,
-} from "./single-elimination";
-import type {
-  PoolingPhaseKey,
-  RoomSize,
-  ScheduleLogicKey,
-  TournamentGroup,
-  TournamentRound,
-} from "./types";
+} from './double-elimination';
+import { singleEliminationBracketPhase, type SingleEliminationConfig } from './single-elimination';
+import type { PoolingPhaseKey, RoomSize, ScheduleLogicKey, TournamentGroup, TournamentRound } from './types';
 
-export interface SingleEliminationProgression {
+interface TournamentProgression {
   rounds: TournamentRound[];
   groups: TournamentGroup[];
-}
-
-export interface SingleEliminationGenerationInput {
-  poolingPhase: PoolingPhaseKey;
-  config: PoolingConfig;
-  format: PoolingFormatConfig & SingleEliminationConfig;
-  roster: string[];
 }
 
 interface CommonGenerationInput {
@@ -45,85 +29,56 @@ interface CommonGenerationInput {
 
 export type TournamentProgressionInput =
   | (CommonGenerationInput & {
-      bracketPhase: "single-elimination";
+      bracketPhase: 'single-elimination';
       format: PoolingFormatConfig & SingleEliminationConfig;
     })
   | (CommonGenerationInput & {
-      bracketPhase: "double-elimination";
+      bracketPhase: 'double-elimination';
       format: PoolingFormatConfig & RaceDoubleEliminationConfig;
     })
   | (CommonGenerationInput & {
-      bracketPhase: "double-elimination-shared-final";
+      bracketPhase: 'double-elimination-shared-final';
       format: PoolingFormatConfig & SharedFinalDoubleEliminationConfig;
     });
 
 export function getMinimumBracketUnits(
-  bracketPhase: Exclude<ScheduleLogicKey, "kings-valley">,
+  bracketPhase: Exclude<ScheduleLogicKey, 'kings-valley'>,
   roomSize: RoomSize,
 ): number {
-  return bracketPhase === "double-elimination" ? 4 : 2 * roomSize.ideal;
+  return bracketPhase === 'double-elimination' ? 4 : 2 * roomSize.ideal;
 }
 
 function buildPoolingPhase(
   input: CommonGenerationInput & { format: PoolingFormatConfig },
 ): PoolingPhaseResult {
   switch (input.poolingPhase) {
-    case "qual-table":
+    case 'qual-table':
       return qualificationTablePoolingPhase(input.config, input.format);
-    case "swiss":
+    case 'swiss':
       return swissPoolingPhase(input.config, input.format);
-    case "group-stage":
+    case 'group-stage':
       return groupStagePoolingPhase(input.config, input.roster);
-    case "none":
+    case 'none':
       return noEliminationWarmupPoolingPhase(input.config, input.format);
   }
 }
 
-export function buildTournamentProgression(
-  input: TournamentProgressionInput,
-): SingleEliminationProgression {
+export function buildTournamentProgression(input: TournamentProgressionInput): TournamentProgression {
   const pooled = buildPoolingPhase(input);
   let bracket: TournamentRound[];
   switch (input.bracketPhase) {
-    case "single-elimination":
-      bracket = singleEliminationBracketPhase(
-        pooled.seedTotal,
-        pooled.nextRoundNum,
-        input.format,
-      );
+    case 'single-elimination':
+      bracket = singleEliminationBracketPhase(pooled.seedTotal, pooled.nextRoundNum, input.format);
       break;
-    case "double-elimination":
-      bracket = raceDoubleEliminationBracketPhase(
-        pooled.seedTotal,
-        pooled.nextRoundNum,
-        input.format,
-      );
+    case 'double-elimination':
+      bracket = raceDoubleEliminationBracketPhase(pooled.seedTotal, pooled.nextRoundNum, input.format);
       break;
-    case "double-elimination-shared-final":
-      bracket = sharedFinalDoubleEliminationBracketPhase(
-        pooled.seedTotal,
-        pooled.nextRoundNum,
-        input.format,
-      );
+    case 'double-elimination-shared-final':
+      bracket = sharedFinalDoubleEliminationBracketPhase(pooled.seedTotal, pooled.nextRoundNum, input.format);
       break;
   }
   return {
     rounds: [...pooled.rounds, ...bracket],
     groups: pooled.groups ?? [],
   };
-}
-
-export function buildSingleEliminationProgression({
-  poolingPhase,
-  config,
-  format,
-  roster,
-}: SingleEliminationGenerationInput): SingleEliminationProgression {
-  return buildTournamentProgression({
-    bracketPhase: "single-elimination",
-    poolingPhase,
-    config,
-    format,
-    roster,
-  });
 }

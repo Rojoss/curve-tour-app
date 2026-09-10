@@ -1,11 +1,6 @@
-import { computeQualificationStandings } from "./advancement";
-import type { RandomSource } from "./runtime";
-import type {
-  RoomSize,
-  RoundAssignment,
-  TournamentGroup,
-  TournamentState,
-} from "./types";
+import { computeQualificationStandings } from './advancement';
+import type { RandomSource } from './runtime';
+import type { RoomSize, RoundAssignment, TournamentGroup, TournamentState } from './types';
 
 export interface SeedCandidate {
   name: string;
@@ -13,13 +8,10 @@ export interface SeedCandidate {
 }
 
 function candidateName(candidate: string | SeedCandidate): string {
-  return typeof candidate === "string" ? candidate : candidate.name;
+  return typeof candidate === 'string' ? candidate : candidate.name;
 }
 
-export function snakeSeed(
-  candidates: Array<string | SeedCandidate>,
-  roomCount: number,
-): RoundAssignment[] {
+export function snakeSeed(candidates: Array<string | SeedCandidate>, roomCount: number): RoundAssignment[] {
   const assignments: RoundAssignment[] = [];
   let direction = 1;
   let roomIndex = 0;
@@ -27,7 +19,7 @@ export function snakeSeed(
     assignments.push({
       name: candidateName(candidate),
       room: roomIndex + 1,
-      isLucky: typeof candidate === "string" ? false : Boolean(candidate.isLucky),
+      isLucky: typeof candidate === 'string' ? false : Boolean(candidate.isLucky),
     });
     roomIndex += direction;
     if (roomIndex >= roomCount) {
@@ -41,18 +33,11 @@ export function snakeSeed(
   return assignments;
 }
 
-export function randomSeed(
-  names: string[],
-  rooms: number[],
-  random: RandomSource,
-): RoundAssignment[] {
+export function randomSeed(names: string[], rooms: number[], random: RandomSource): RoundAssignment[] {
   const shuffled = [...names];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(random.next() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [
-      shuffled[swapIndex],
-      shuffled[index],
-    ];
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   const assignments: RoundAssignment[] = [];
   let playerIndex = 0;
@@ -107,9 +92,7 @@ export function avoidSameGroupInFirstBracketRound(
       for (const [otherRoom, originalOtherIndices] of byRoom) {
         if (otherRoom === room || progress) continue;
         let otherIndices = originalOtherIndices;
-        const otherGroups = otherIndices.map((index) =>
-          groupOf.get(seeded[index].name),
-        );
+        const otherGroups = otherIndices.map((index) => groupOf.get(seeded[index].name));
         if (movedGroup !== undefined && otherGroups.includes(movedGroup)) continue;
         for (const candidateIndex of otherIndices) {
           const candidateGroup = groupOf.get(seeded[candidateIndex].name);
@@ -119,12 +102,8 @@ export function avoidSameGroupInFirstBracketRound(
           const temporaryRoom = seeded[collisionIndex].room;
           seeded[collisionIndex].room = seeded[candidateIndex].room;
           seeded[candidateIndex].room = temporaryRoom;
-          indices = indices.map((index) =>
-            index === collisionIndex ? candidateIndex : index,
-          );
-          otherIndices = otherIndices.map((index) =>
-            index === candidateIndex ? collisionIndex : index,
-          );
+          indices = indices.map((index) => (index === collisionIndex ? candidateIndex : index));
+          otherIndices = otherIndices.map((index) => (index === candidateIndex ? collisionIndex : index));
           byRoom.set(room, indices);
           byRoom.set(otherRoom, otherIndices);
           progress = true;
@@ -147,12 +126,12 @@ export function selectPoolingBye(
   return advancing.find((candidate) => (counts[candidate.name] ?? 0) === minimum);
 }
 
-export function swissPairKey(first: string, second: string): string {
+function swissPairKey(first: string, second: string): string {
   return first < second ? `${first}|${second}` : `${second}|${first}`;
 }
 
-export function collectPlayedSwissPairs(
-  state: Pick<TournamentState, "rounds" | "assignments">,
+function collectPlayedSwissPairs(
+  state: Pick<TournamentState, 'rounds' | 'assignments'>,
   throughRoundIndex: number,
 ): Set<string> {
   const played = new Set<string>();
@@ -161,10 +140,7 @@ export function collectPlayedSwissPairs(
     const byRoom = new Map<number, string[]>();
     for (const assignment of state.assignments[roundIndex] ?? []) {
       if (assignment.room === null) continue;
-      byRoom.set(assignment.room, [
-        ...(byRoom.get(assignment.room) ?? []),
-        assignment.name,
-      ]);
+      byRoom.set(assignment.room, [...(byRoom.get(assignment.room) ?? []), assignment.name]);
     }
     for (const names of byRoom.values()) {
       for (let first = 0; first < names.length; first += 1) {
@@ -194,9 +170,7 @@ export function swissFoldPair(options: {
     );
   }
   const standings = computeQualificationStandings(state);
-  const sorted = standings
-    .filter((entry) => activeNames.includes(entry.name))
-    .map((entry) => entry.name);
+  const sorted = standings.filter((entry) => activeNames.includes(entry.name)).map((entry) => entry.name);
   for (const name of activeNames) {
     if (!sorted.includes(name)) sorted.push(name);
   }
@@ -207,9 +181,7 @@ export function swissFoldPair(options: {
     const minimum = Math.min(...sorted.map((name) => poolingByeCounts[name] ?? 0));
     const median = Math.floor(sorted.length / 2);
     let bestDistance = Number.POSITIVE_INFINITY;
-    for (const name of sorted.filter(
-      (candidate) => (poolingByeCounts[candidate] ?? 0) === minimum,
-    )) {
+    for (const name of sorted.filter((candidate) => (poolingByeCounts[candidate] ?? 0) === minimum)) {
       const distance = Math.abs(sorted.indexOf(name) - median);
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -217,27 +189,20 @@ export function swissFoldPair(options: {
       }
     }
     sorted.splice(sorted.indexOf(byeName as string), 1);
-    poolingByeCounts[byeName as string] =
-      (poolingByeCounts[byeName as string] ?? 0) + 1;
+    poolingByeCounts[byeName as string] = (poolingByeCounts[byeName as string] ?? 0) + 1;
   }
 
   const half = sorted.length / 2;
-  const pairs: Array<[string, string]> = Array.from(
-    { length: half },
-    (_, index) => [sorted[index], sorted[index + half]],
-  );
+  const pairs: Array<[string, string]> = Array.from({ length: half }, (_, index) => [
+    sorted[index],
+    sorted[index + half],
+  ]);
   const played = collectPlayedSwissPairs(state, throughRoundIndex);
   for (let index = 0; index < pairs.length; index += 1) {
-    if (
-      played.has(swissPairKey(...pairs[index])) &&
-      index + 1 < pairs.length
-    ) {
+    if (played.has(swissPairKey(...pairs[index])) && index + 1 < pairs.length) {
       const swappedFirst: [string, string] = [pairs[index][0], pairs[index + 1][1]];
       const swappedSecond: [string, string] = [pairs[index + 1][0], pairs[index][1]];
-      if (
-        !played.has(swissPairKey(...swappedFirst)) &&
-        !played.has(swissPairKey(...swappedSecond))
-      ) {
+      if (!played.has(swissPairKey(...swappedFirst)) && !played.has(swissPairKey(...swappedSecond))) {
         pairs[index] = swappedFirst;
         pairs[index + 1] = swappedSecond;
       }

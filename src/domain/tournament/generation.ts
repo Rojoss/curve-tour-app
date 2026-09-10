@@ -1,41 +1,40 @@
-import { getGameFormat, deriveRoomSize } from "./formats";
+import { getGameFormat, deriveRoomSize } from './formats';
 import {
   GROUP_SIZE_BOUNDS,
   QUALIFICATION_ROUNDS,
   computeSwissRoundCount,
   seedFromGroupStageRound,
-} from "./pooling";
-import { distributeRooms, validateRoomCap } from "./room-distribution";
-import { rosterKeys } from "./roster";
-import { randomSeed } from "./seeding";
+} from './pooling';
+import { distributeRooms, validateRoomCap } from './room-distribution';
+import { rosterKeys } from './roster';
+import { randomSeed } from './seeding';
 import {
   buildTournamentProgression,
   getMinimumBracketUnits,
-} from "./schedule-generation";
-import type { TournamentRuntime } from "./runtime";
+  type TournamentProgressionInput,
+} from './schedule-generation';
+import type { TournamentRuntime } from './runtime';
 import type {
   GeneratedTournamentConfig,
   MaterializedGamemodeConfig,
   PersistedSetup,
-  ScheduleLogicKey,
   TournamentState,
-} from "./types";
+} from './types';
 
-export interface GenerationForm extends PersistedSetup {
+interface GenerationForm extends PersistedSetup {
   /** Intentionally omitted from PersistedSetup for legacy compatibility. */
   lbQualifiers?: string;
 }
 
-export type GenerateTournamentResult =
-  | { status: "generated"; state: TournamentState }
-  | { status: "invalid"; message: string };
+type GenerateTournamentResult =
+  { status: 'generated'; state: TournamentState } | { status: 'invalid'; message: string };
 
 function parsed(value: string, fallback: number): number {
   return Number.parseInt(value, 10) || fallback;
 }
 
 function generationError(message: string): GenerateTournamentResult {
-  return { status: "invalid", message };
+  return { status: 'invalid', message };
 }
 
 export function generateTournament(
@@ -49,13 +48,13 @@ export function generateTournament(
     );
   }
   const format = getGameFormat(form.gameFormat);
-  if (!format) return generationError("This game format is not available yet.");
-  if (form.scheduleLogic === "kings-valley") {
-    return generationError("This schedule logic is not available yet.");
+  if (!format) return generationError('This game format is not available yet.');
+  if (form.scheduleLogic === 'kings-valley') {
+    return generationError('This schedule logic is not available yet.');
   }
   const schedule = form.scheduleLogic;
   const floorIdeal = format.defaultRoomSize?.ideal ?? format.idealRoomSize;
-  if (!floorIdeal) return generationError("This game format has no room size.");
+  if (!floorIdeal) return generationError('This game format has no room size.');
   const floorMin = getMinimumBracketUnits(schedule, {
     min: floorIdeal,
     max: floorIdeal,
@@ -64,9 +63,9 @@ export function generateTournament(
   const unitPlural = format.unitLabelPlural.toLowerCase();
   if (current.confirmedCount < floorMin) {
     const reason =
-      schedule === "single-elimination"
+      schedule === 'single-elimination'
         ? ` (Semis is fixed at ${floorMin} ${unitPlural} in 2 rooms of ${floorIdeal})`
-        : "";
+        : '';
     return generationError(
       `This format needs at least ${floorMin} confirmed ${unitPlural}${reason}. Confirmed: ${current.confirmedCount}.`,
     );
@@ -79,11 +78,11 @@ export function generateTournament(
     groupSize: parsed(form.groupSize, GROUP_SIZE_BOUNDS.ideal),
     roundRobinMode: form.roundRobinMode,
     qualifiersPerGroup: parsed(form.qualifiersPerGroup, 2),
-    scoring: "fairpoints",
+    scoring: 'fairpoints',
     finalsGames: parsed(form.finalsGames, 3),
     semisGames: parsed(form.semisGames, 1),
   };
-  if (config.poolingPhase === "group-stage") {
+  if (config.poolingPhase === 'group-stage') {
     if (config.groupSize < GROUP_SIZE_BOUNDS.min) {
       return generationError(
         `Group size must be at least ${GROUP_SIZE_BOUNDS.min} — round-robin below that is degenerate. Got ${config.groupSize}.`,
@@ -95,72 +94,58 @@ export function generateTournament(
       );
     }
   }
-  if (config.poolingPhase !== "none") {
+  if (config.poolingPhase !== 'none') {
     config.qualAdv = Math.min(Math.max(config.qualAdv, floorMin), config.n);
   }
 
   const oddCountStrategy = format.supportedOddCountStrategies?.length
     ? form.oddCountStrategy || undefined
     : undefined;
-  if (format.supportedOddCountStrategies && oddCountStrategy === "none") {
+  if (format.supportedOddCountStrategies && oddCountStrategy === 'none') {
     const ideal = format.idealRoomSize as number;
-    if (
-      config.poolingPhase !== "none" &&
-      config.poolingPhase !== "group-stage" &&
-      config.n % ideal !== 0
-    ) {
+    if (config.poolingPhase !== 'none' && config.poolingPhase !== 'group-stage' && config.n % ideal !== 0) {
       const alternatives = format.supportedOddCountStrategies
-        .filter((strategy) => strategy !== "none")
-        .map((strategy) =>
-          strategy.charAt(0).toUpperCase() + strategy.slice(1),
-        )
-        .join("/");
+        .filter((strategy) => strategy !== 'none')
+        .map((strategy) => strategy.charAt(0).toUpperCase() + strategy.slice(1))
+        .join('/');
       return generationError(
-        `With "None" selected as the odd-count strategy, the confirmed ${unitPlural} must be an exact multiple of ${ideal} (this format's room size) so the pooling phase itself can pair everyone cleanly — got ${config.n}.${alternatives ? ` Adjust the count, or pick ${alternatives} instead.` : " Adjust the count."}`,
+        `With "None" selected as the odd-count strategy, the confirmed ${unitPlural} must be an exact multiple of ${ideal} (this format's room size) so the pooling phase itself can pair everyone cleanly — got ${config.n}.${alternatives ? ` Adjust the count, or pick ${alternatives} instead.` : ' Adjust the count.'}`,
       );
     }
     const eliminationEntryCount =
-      config.poolingPhase === "group-stage"
+      config.poolingPhase === 'group-stage'
         ? distributeRooms(config.n, {
             min: GROUP_SIZE_BOUNDS.min,
             max: GROUP_SIZE_BOUNDS.max,
             ideal: config.groupSize,
           }).length * config.qualifiersPerGroup
-        : config.poolingPhase !== "none"
+        : config.poolingPhase !== 'none'
           ? config.qualAdv
           : config.n;
     const isMultiple = eliminationEntryCount % ideal === 0;
     const isPowerOfTwo =
-      eliminationEntryCount > 0 &&
-      (eliminationEntryCount & (eliminationEntryCount - 1)) === 0;
-    const needsPowerOfTwo = schedule === "double-elimination";
+      eliminationEntryCount > 0 && (eliminationEntryCount & (eliminationEntryCount - 1)) === 0;
+    const needsPowerOfTwo = schedule === 'double-elimination';
     if (!(needsPowerOfTwo ? isMultiple && isPowerOfTwo : isMultiple)) {
       const alternatives = format.supportedOddCountStrategies
-        .filter((strategy) => strategy !== "none")
-        .map((strategy) =>
-          strategy.charAt(0).toUpperCase() + strategy.slice(1),
-        )
-        .join("/");
+        .filter((strategy) => strategy !== 'none')
+        .map((strategy) => strategy.charAt(0).toUpperCase() + strategy.slice(1))
+        .join('/');
       const requirement = needsPowerOfTwo
-        ? "must be an exact power of 2 (double elimination halves the field every round)"
+        ? 'must be an exact power of 2 (double elimination halves the field every round)'
         : `must be an exact multiple of ${ideal} (this format's room size)`;
       return generationError(
-        `With "None" selected as the odd-count strategy, the ${config.poolingPhase !== "none" ? "number advancing to the bracket" : `confirmed ${unitPlural}`} ${requirement} — got ${eliminationEntryCount}.${alternatives ? ` Adjust the count, or pick ${alternatives} instead.` : " Adjust the count."}`,
+        `With "None" selected as the odd-count strategy, the ${config.poolingPhase !== 'none' ? 'number advancing to the bracket' : `confirmed ${unitPlural}`} ${requirement} — got ${eliminationEntryCount}.${alternatives ? ` Adjust the count, or pick ${alternatives} instead.` : ' Adjust the count.'}`,
       );
     }
   }
 
-  const semisOverride =
-    schedule === "single-elimination"
-      ? parsed(form.semisOverride, 0) || null
-      : null;
+  const semisOverride = schedule === 'single-elimination' ? parsed(form.semisOverride, 0) || null : null;
   const finalOverride =
-    schedule === "single-elimination" ||
-    schedule === "double-elimination-shared-final"
+    schedule === 'single-elimination' || schedule === 'double-elimination-shared-final'
       ? parsed(form.finalOverride, 0) || null
       : null;
-  const overrideEntryCount =
-    config.poolingPhase !== "none" ? config.qualAdv : config.n;
+  const overrideEntryCount = config.poolingPhase !== 'none' ? config.qualAdv : config.n;
   if (semisOverride && finalOverride && finalOverride > semisOverride) {
     return generationError(
       `Final size override (${finalOverride}) can't exceed the Semis size override (${semisOverride}) — there can't be more finalists than Semis participants.`,
@@ -168,15 +153,15 @@ export function generateTournament(
   }
   if (semisOverride && semisOverride > overrideEntryCount) {
     return generationError(
-      `Semis size override (${semisOverride}) can't exceed the ${config.poolingPhase !== "none" ? "number advancing to the bracket (" : "confirmed count ("}${overrideEntryCount}) — there'd be nothing left to eliminate down to it.`,
+      `Semis size override (${semisOverride}) can't exceed the ${config.poolingPhase !== 'none' ? 'number advancing to the bracket (' : 'confirmed count ('}${overrideEntryCount}) — there'd be nothing left to eliminate down to it.`,
     );
   }
 
   const roomSize = deriveRoomSize(format, oddCountStrategy);
   const prospectiveFinalSize = finalOverride || roomSize.ideal;
   let lbQualifiers: number | undefined;
-  if (schedule === "double-elimination-shared-final") {
-    lbQualifiers = parsed(form.lbQualifiers ?? "2", 0);
+  if (schedule === 'double-elimination-shared-final') {
+    lbQualifiers = parsed(form.lbQualifiers ?? '2', 0);
     if (!(lbQualifiers >= 1) || !(lbQualifiers < prospectiveFinalSize)) {
       return generationError(
         `LB qualifiers into the Final (${lbQualifiers}) must be at least 1 and less than the Final size (${prospectiveFinalSize}).`,
@@ -187,9 +172,7 @@ export function generateTournament(
   const gamemodeConfig: MaterializedGamemodeConfig = {
     qualRounds: QUALIFICATION_ROUNDS,
     swissRounds: computeSwissRoundCount(config.n),
-    teamScoringRule: format.teamSize
-      ? form.teamScoringRule || "sum-members"
-      : "sum-members",
+    teamScoringRule: format.teamSize ? form.teamScoringRule || 'sum-members' : 'sum-members',
     ...(oddCountStrategy ? { oddCountStrategy } : {}),
     roomSize,
     semisSize: semisOverride || 2 * roomSize.ideal,
@@ -208,41 +191,15 @@ export function generateTournament(
   const roster = rosterKeys(current.players);
   let progression;
   try {
-    switch (schedule) {
-      case "single-elimination":
-        progression = buildTournamentProgression({
-          bracketPhase: schedule,
-          poolingPhase: config.poolingPhase,
-          config,
-          format: gamemodeConfig,
-          roster,
-        });
-        break;
-      case "double-elimination":
-        progression = buildTournamentProgression({
-          bracketPhase: schedule,
-          poolingPhase: config.poolingPhase,
-          config,
-          format: gamemodeConfig,
-          roster,
-        });
-        break;
-      case "double-elimination-shared-final":
-        progression = buildTournamentProgression({
-          bracketPhase: schedule,
-          poolingPhase: config.poolingPhase,
-          config,
-          format: gamemodeConfig as MaterializedGamemodeConfig & {
-            lbQualifiers: number;
-          },
-          roster,
-        });
-        break;
-    }
+    progression = buildTournamentProgression({
+      bracketPhase: schedule,
+      poolingPhase: config.poolingPhase,
+      config,
+      format: gamemodeConfig,
+      roster,
+    } as TournamentProgressionInput);
   } catch (error) {
-    return generationError(
-      error instanceof Error ? error.message : String(error),
-    );
+    return generationError(error instanceof Error ? error.message : String(error));
   }
   const roomCapError = validateRoomCap(progression.rounds, format);
   if (roomCapError) return generationError(roomCapError);
@@ -291,32 +248,21 @@ export function generateTournament(
     gamemodeConfig,
   };
   const initialPool = rosterKeys(state.players);
-  if (config.poolingPhase === "group-stage") {
+  if (config.poolingPhase === 'group-stage') {
     state.assignments[0] = seedFromGroupStageRound(state.rounds[0]);
     state.byes[0] = [...(state.rounds[0].groupByes ?? [])];
-  } else if (
-    gamemodeConfig.oddCountStrategy === "bye" &&
-    initialPool.length % roomSize.ideal !== 0
-  ) {
+  } else if (gamemodeConfig.oddCountStrategy === 'bye' && initialPool.length % roomSize.ideal !== 0) {
     const firstBye = initialPool[0];
     state.byes[0] = [firstBye];
     state.poolingByeCounts[firstBye] = 1;
-    state.assignments[0] = randomSeed(
-      initialPool.slice(1),
-      state.rounds[0].rooms,
-      runtime.random,
-    );
+    state.assignments[0] = randomSeed(initialPool.slice(1), state.rounds[0].rooms, runtime.random);
     state.assignments[0].push({
       name: firstBye,
       room: null,
       isLucky: false,
     });
   } else {
-    state.assignments[0] = randomSeed(
-      initialPool,
-      state.rounds[0].rooms,
-      runtime.random,
-    );
+    state.assignments[0] = randomSeed(initialPool, state.rounds[0].rooms, runtime.random);
   }
-  return { status: "generated", state };
+  return { status: 'generated', state };
 }

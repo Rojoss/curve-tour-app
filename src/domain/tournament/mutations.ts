@@ -2,22 +2,14 @@ import {
   computeGroupStandings,
   computeQualificationStandings,
   invalidateStaleTieResolutions,
-} from "./advancement";
-import { progressGrandFinalRace } from "./finals";
-import { getGameFormat } from "./formats";
-import { validateRoomCap } from "./room-distribution";
-import { rosterKeys } from "./roster";
-import {
-  buildTournamentProgression,
-  type TournamentProgressionInput,
-} from "./schedule-generation";
-import { scoreKeysForPosition, tieResolutionList } from "./scoring";
-import type {
-  MaterializedGamemodeConfig,
-  TournamentRoster,
-  TournamentState,
-  TournamentTeam,
-} from "./types";
+} from './advancement';
+import { progressGrandFinalRace } from './finals';
+import { getGameFormat } from './formats';
+import { validateRoomCap } from './room-distribution';
+import { rosterKeys } from './roster';
+import { buildTournamentProgression, type TournamentProgressionInput } from './schedule-generation';
+import { scoreKeysForPosition, tieResolutionList } from './scoring';
+import type { MaterializedGamemodeConfig, TournamentRoster, TournamentState, TournamentTeam } from './types';
 
 function dirty(state: TournamentState): TournamentState {
   return { ...state, needsSave: true };
@@ -30,7 +22,7 @@ export function setRoundScore(
   roundIndex: number,
   room: number,
 ): TournamentState {
-  const parsed = value === "" || value === null ? null : Number.parseInt(String(value), 10);
+  const parsed = value === '' || value === null ? null : Number.parseInt(String(value), 10);
   let next = {
     ...state,
     scores: { ...state.scores, [key]: Number.isNaN(parsed) ? null : parsed },
@@ -51,22 +43,18 @@ export function setFinalScore(
   key: string,
   value: string | number | null,
 ): TournamentState {
-  const parsed = value === "" || value === null ? "" : Number.parseInt(String(value), 10);
+  const parsed = value === '' || value === null ? '' : Number.parseInt(String(value), 10);
   const updated = dirty({
     ...state,
     finalScores: {
       ...state.finalScores,
-      [key]: typeof parsed === "number" && Number.isNaN(parsed) ? "" : parsed,
+      [key]: typeof parsed === 'number' && Number.isNaN(parsed) ? '' : parsed,
     },
   });
   return progressGrandFinalRace(updated).state;
 }
 
-export function resolveTournamentTie(
-  state: TournamentState,
-  key: string,
-  name: string,
-): TournamentState {
+export function resolveTournamentTie(state: TournamentState, key: string, name: string): TournamentState {
   const list = [...tieResolutionList(state, key)];
   if (!list.includes(name)) list.push(name);
   return dirty({
@@ -75,18 +63,14 @@ export function resolveTournamentTie(
   });
 }
 
-export function renameIndividual(
-  state: TournamentState,
-  oldName: string,
-  newName: string,
-): TournamentState {
+export function renameIndividual(state: TournamentState, oldName: string, newName: string): TournamentState {
   const trimmed = newName.trim();
   if (!trimmed || trimmed === oldName) return state;
   const players = state.players as string[];
   const reserves = state.reserves as string[];
   if (players.includes(trimmed) || reserves.includes(trimmed)) return state;
   const rename = (name: string) => (name === oldName ? trimmed : name);
-  const finalScores: TournamentState["finalScores"] = {};
+  const finalScores: TournamentState['finalScores'] = {};
   for (const [key, score] of Object.entries(state.finalScores)) {
     const match = key.match(/^(game\d+)-(.*)$/u);
     finalScores[match?.[2] === oldName ? `${match[1]}-${trimmed}` : key] = score;
@@ -112,19 +96,19 @@ export function renameIndividual(
 
 function rebuildFutureRounds(state: TournamentState): TournamentState | null {
   const round = state.rounds[state.curRound];
-  if (!round?.isNoElim || state.cfg.poolingPhase === "group-stage") return state;
+  if (!round?.isNoElim || state.cfg.poolingPhase === 'group-stage') return state;
   const format = getGameFormat(state.gameFormat);
   if (!format) return null;
   const config = state.gamemodeConfig as MaterializedGamemodeConfig;
   if (!config.roomSize || !config.bracketPhase) return null;
   const progression = buildTournamentProgression({
-    bracketPhase: config.bracketPhase as Exclude<MaterializedGamemodeConfig["bracketPhase"], "kings-valley">,
-    poolingPhase: state.cfg.poolingPhase ?? "none",
+    bracketPhase: config.bracketPhase as Exclude<MaterializedGamemodeConfig['bracketPhase'], 'kings-valley'>,
+    poolingPhase: state.cfg.poolingPhase ?? 'none',
     config: {
       n: rosterKeys(state.players).length,
       qualAdv: state.cfg.qualAdv ?? rosterKeys(state.players).length,
       groupSize: state.cfg.groupSize ?? 4,
-      roundRobinMode: state.cfg.roundRobinMode ?? "single",
+      roundRobinMode: state.cfg.roundRobinMode ?? 'single',
       qualifiersPerGroup: state.cfg.qualifiersPerGroup ?? 2,
     },
     format: config,
@@ -144,31 +128,28 @@ function rebuildFutureRounds(state: TournamentState): TournamentState | null {
     rounds,
     assignments: state.assignments.slice(0, state.curRound + 1),
     byes: [...state.byes.slice(0, state.curRound + 1), ...emptyTail.map(() => [])],
-    luckyLosers: [
-      ...state.luckyLosers.slice(0, state.curRound + 1),
-      ...emptyTail.map(() => []),
-    ],
+    luckyLosers: [...state.luckyLosers.slice(0, state.curRound + 1), ...emptyTail.map(() => [])],
   };
 }
 
 export type ReserveAddResult =
-  | { status: "added"; state: TournamentState }
-  | { status: "blocked"; reason: "closed" | "group-stage" | "strict-room" | "room-cap" }
-  | { status: "confirm-over-cap"; room: number; count: number };
+  | { status: 'added'; state: TournamentState }
+  | { status: 'blocked'; reason: 'closed' | 'group-stage' | 'strict-room' | 'room-cap' }
+  | { status: 'confirm-over-cap'; room: number; count: number };
 
 export function addReserveUnit(
   state: TournamentState,
   key: string,
   options: { allowOverCap?: boolean } = {},
 ): ReserveAddResult {
-  if (!state.reserveOpen) return { status: "blocked", reason: "closed" };
-  if (state.cfg.poolingPhase === "group-stage") {
-    return { status: "blocked", reason: "group-stage" };
+  if (!state.reserveOpen) return { status: 'blocked', reason: 'closed' };
+  if (state.cfg.poolingPhase === 'group-stage') {
+    return { status: 'blocked', reason: 'group-stage' };
   }
   const format = getGameFormat(state.gameFormat);
   const roomSize = state.gamemodeConfig.roomSize;
   const round = state.rounds[state.curRound];
-  if (!format || !roomSize || !round) return { status: "blocked", reason: "room-cap" };
+  if (!format || !roomSize || !round) return { status: 'blocked', reason: 'room-cap' };
   const assignments = state.assignments[state.curRound] ?? [];
   let room = 1;
   let count = assignments.filter((entry) => entry.room === room).length;
@@ -179,16 +160,16 @@ export function addReserveUnit(
       count = candidateCount;
     }
   }
-  if (count >= roomSize.max && state.gamemodeConfig.oddCountStrategy === "none") {
-    return { status: "blocked", reason: "strict-room" };
+  if (count >= roomSize.max && state.gamemodeConfig.oddCountStrategy === 'none') {
+    return { status: 'blocked', reason: 'strict-room' };
   }
   if (count >= roomSize.max && !options.allowOverCap) {
-    return { status: "confirm-over-cap", room, count };
+    return { status: 'confirm-over-cap', room, count };
   }
   const team = format.teamSize
     ? (state.reserves as TournamentTeam[]).find((entry) => entry.teamId === key)
     : undefined;
-  if (format.teamSize && !team) return { status: "blocked", reason: "room-cap" };
+  if (format.teamSize && !team) return { status: 'blocked', reason: 'room-cap' };
   const nextAssignments = state.assignments.map((entries) => entries.map((entry) => ({ ...entry })));
   nextAssignments[state.curRound] = [
     ...(nextAssignments[state.curRound] ?? []),
@@ -205,9 +186,9 @@ export function addReserveUnit(
       : (state.reserves as string[]).filter((entry) => entry !== key),
   };
   const rebuilt = rebuildFutureRounds(next);
-  if (!rebuilt) return { status: "blocked", reason: "room-cap" };
+  if (!rebuilt) return { status: 'blocked', reason: 'room-cap' };
   next = dirty(rebuilt);
-  return { status: "added", state: next };
+  return { status: 'added', state: next };
 }
 
 export function addWalkUpIndividual(
@@ -217,16 +198,12 @@ export function addWalkUpIndividual(
 ): ReserveAddResult {
   const trimmed = name.trim();
   if (!trimmed || getGameFormat(state.gameFormat)?.teamSize) {
-    return { status: "blocked", reason: "room-cap" };
+    return { status: 'blocked', reason: 'room-cap' };
   }
   if ((state.players as string[]).includes(trimmed) || (state.reserves as string[]).includes(trimmed)) {
-    return { status: "blocked", reason: "room-cap" };
+    return { status: 'blocked', reason: 'room-cap' };
   }
-  return addReserveUnit(
-    { ...state, reserves: [...(state.reserves as string[]), trimmed] },
-    trimmed,
-    options,
-  );
+  return addReserveUnit({ ...state, reserves: [...(state.reserves as string[]), trimmed] }, trimmed, options);
 }
 
 export function removeReserveUnit(state: TournamentState, key: string): TournamentState {
@@ -256,34 +233,25 @@ function removeUnitFromCurrentRoom(state: TournamentState, key: string, teamSize
   const position = roomUnits.findIndex((entry) => entry.name === key);
   const scores = { ...state.scores };
   const round = state.rounds[roundIndex];
+  const keysAtPosition = (positionIndex: number) =>
+    scoreKeysForPosition({
+      roundIndex,
+      room,
+      position: positionIndex,
+      numGames: Math.max(round.numGames ?? 1, 1),
+      teamSize: teamSize || undefined,
+    });
+
   for (let index = position + 1; index < roomUnits.length; index += 1) {
-    const from = scoreKeysForPosition({
-      roundIndex,
-      room,
-      position: index,
-      numGames: round.numGames && round.numGames > 1 ? round.numGames : 1,
-      teamSize: teamSize || undefined,
-    });
-    const to = scoreKeysForPosition({
-      roundIndex,
-      room,
-      position: index - 1,
-      numGames: round.numGames && round.numGames > 1 ? round.numGames : 1,
-      teamSize: teamSize || undefined,
-    });
+    const from = keysAtPosition(index);
+    const to = keysAtPosition(index - 1);
     from.forEach((fromKey, offset) => {
       const toKey = to[offset];
       if (scores[fromKey] !== undefined) scores[toKey] = scores[fromKey];
       else delete scores[toKey];
     });
   }
-  for (const scoreKey of scoreKeysForPosition({
-    roundIndex,
-    room,
-    position: roomUnits.length - 1,
-    numGames: round.numGames && round.numGames > 1 ? round.numGames : 1,
-    teamSize: teamSize || undefined,
-  })) delete scores[scoreKey];
+  for (const scoreKey of keysAtPosition(roomUnits.length - 1)) delete scores[scoreKey];
   return invalidateStaleTieResolutions(
     {
       ...state,
@@ -305,7 +273,7 @@ export function removeRosterUnit(state: TournamentState, key: string): Tournamen
   const tieResolutions = Object.fromEntries(
     Object.entries(next.tieResolutions).map(([tieKey, value]) => {
       const filtered = tieResolutionList(next, tieKey).filter((name) => name !== key);
-      return [tieKey, Array.isArray(value) ? filtered : (filtered[0] ?? "")];
+      return [tieKey, Array.isArray(value) ? filtered : (filtered[0] ?? '')];
     }),
   );
   next = {
@@ -324,46 +292,66 @@ export function removeRosterUnit(state: TournamentState, key: string): Tournamen
   return dirty(next);
 }
 
-export function swapIndividual(state: TournamentState, oldName: string, newName: string): TournamentState {
-  const trimmed = newName.trim();
-  const players = state.players as string[];
-  if (!trimmed || players.includes(trimmed)) return state;
+function replaceAssignedUnit(
+  state: TournamentState,
+  oldKey: string,
+  newKey: string,
+  teamSize?: number,
+): TournamentState | null {
   const assignments = state.assignments.map((entries) => entries.map((entry) => ({ ...entry })));
   const current = assignments[state.curRound] ?? [];
-  const assignmentIndex = current.findIndex((entry) => entry.name === oldName);
-  if (assignmentIndex < 0) return state;
+  const assignmentIndex = current.findIndex((entry) => entry.name === oldKey);
+  if (assignmentIndex < 0) return null;
+
   const room = current[assignmentIndex].room;
-  const position = current.filter((entry) => entry.room === room).findIndex((entry) => entry.name === oldName);
-  current[assignmentIndex].name = trimmed;
+  const position = current.filter((entry) => entry.room === room).findIndex((entry) => entry.name === oldKey);
+  current[assignmentIndex].name = newKey;
+
   const scores = { ...state.scores };
   if (room !== null) {
     for (const key of scoreKeysForPosition({
       roundIndex: state.curRound,
       room,
       position,
-      numGames: (state.rounds[state.curRound].numGames ?? 1) > 1
-        ? state.rounds[state.curRound].numGames
-        : 1,
-    })) delete scores[key];
+      numGames: Math.max(state.rounds[state.curRound].numGames ?? 1, 1),
+      teamSize,
+    }))
+      delete scores[key];
   }
+
+  const poolingByeCounts = { ...state.poolingByeCounts };
+  if (poolingByeCounts[oldKey] !== undefined) {
+    poolingByeCounts[newKey] = poolingByeCounts[oldKey];
+    delete poolingByeCounts[oldKey];
+  }
+
   let next: TournamentState = {
     ...state,
     scores,
     assignments,
+    qualTable: state.qualTable.filter((entry) => entry.name !== oldKey),
+    byes: state.byes.map((values, index) =>
+      index === state.curRound ? values.map((name) => (name === oldKey ? newKey : name)) : values,
+    ),
+    poolingByeCounts,
+  };
+  if (room !== null) next = invalidateStaleTieResolutions(next, state.curRound, room);
+  return next;
+}
+
+export function swapIndividual(state: TournamentState, oldName: string, newName: string): TournamentState {
+  const trimmed = newName.trim();
+  const players = state.players as string[];
+  if (!trimmed || players.includes(trimmed)) return state;
+
+  const replaced = replaceAssignedUnit(state, oldName, trimmed);
+  if (!replaced) return state;
+
+  return dirty({
+    ...replaced,
     players: players.filter((name) => name !== oldName).concat(trimmed),
     reserves: (state.reserves as string[]).filter((name) => name !== trimmed),
-    qualTable: state.qualTable.filter((entry) => entry.name !== oldName),
-    byes: state.byes.map((values, index) =>
-      index === state.curRound ? values.map((name) => (name === oldName ? trimmed : name)) : values,
-    ),
-    poolingByeCounts: { ...state.poolingByeCounts },
-  };
-  if (next.poolingByeCounts[oldName] !== undefined) {
-    next.poolingByeCounts[trimmed] = next.poolingByeCounts[oldName];
-    delete next.poolingByeCounts[oldName];
-  }
-  if (room !== null) next = invalidateStaleTieResolutions(next, state.curRound, room);
-  return dirty(next);
+  });
 }
 
 export function swapTeam(
@@ -376,55 +364,20 @@ export function swapTeam(
   if (!teamSize || (state.players as TournamentTeam[]).some((team) => team.teamId === replacement.teamId)) {
     return state;
   }
-  const assignments = state.assignments.map((entries) => entries.map((entry) => ({ ...entry })));
-  const current = assignments[state.curRound] ?? [];
-  const assignmentIndex = current.findIndex((entry) => entry.name === oldTeamId);
-  if (assignmentIndex < 0) return state;
-  const room = current[assignmentIndex].room;
-  const position = current.filter((entry) => entry.room === room).findIndex((entry) => entry.name === oldTeamId);
-  current[assignmentIndex].name = replacement.teamId;
-  const scores = { ...state.scores };
-  if (room !== null) {
-    for (const key of scoreKeysForPosition({
-      roundIndex: state.curRound,
-      room,
-      position,
-      numGames: (state.rounds[state.curRound].numGames ?? 1) > 1
-        ? state.rounds[state.curRound].numGames
-        : 1,
-      teamSize,
-    })) delete scores[key];
-  }
-  let next: TournamentState = {
-    ...state,
-    scores,
-    assignments,
+  const replaced = replaceAssignedUnit(state, oldTeamId, replacement.teamId, teamSize);
+  if (!replaced) return state;
+
+  return dirty({
+    ...replaced,
     players: (state.players as TournamentTeam[])
       .filter((team) => team.teamId !== oldTeamId)
       .concat(replacement),
-    reserves: (state.reserves as TournamentTeam[]).filter(
-      (team) => team.teamId !== replacement.teamId,
-    ),
-    qualTable: state.qualTable.filter((entry) => entry.name !== oldTeamId),
-    byes: state.byes.map((values, index) =>
-      index === state.curRound
-        ? values.map((name) => (name === oldTeamId ? replacement.teamId : name))
-        : values,
-    ),
-    poolingByeCounts: { ...state.poolingByeCounts },
+    reserves: (state.reserves as TournamentTeam[]).filter((team) => team.teamId !== replacement.teamId),
     groups: state.groups.map((group) => ({
       ...group,
-      members: group.members.map((name) =>
-        name === oldTeamId ? replacement.teamId : name,
-      ),
+      members: group.members.map((name) => (name === oldTeamId ? replacement.teamId : name)),
     })),
-  };
-  if (next.poolingByeCounts[oldTeamId] !== undefined) {
-    next.poolingByeCounts[replacement.teamId] = next.poolingByeCounts[oldTeamId];
-    delete next.poolingByeCounts[oldTeamId];
-  }
-  if (room !== null) next = invalidateStaleTieResolutions(next, state.curRound, room);
-  return dirty(next);
+  });
 }
 
 export function fillTeamSlot(
@@ -445,9 +398,7 @@ export function fillTeamSlot(
     ? next
     : {
         ...next,
-        reserveIndividuals: next.reserveIndividuals.filter(
-          (_, index) => index !== reserveIndex,
-        ),
+        reserveIndividuals: next.reserveIndividuals.filter((_, index) => index !== reserveIndex),
       };
 }
 

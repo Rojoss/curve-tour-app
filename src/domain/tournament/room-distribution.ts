@@ -1,6 +1,6 @@
-import type { GameFormatDefinition, RoomSize, TournamentRound } from "./types";
+import type { GameFormatDefinition, RoomSize, TournamentRound } from './types';
 
-export const HARD_ROOM_PLAYER_CAP = 10;
+const HARD_ROOM_PLAYER_CAP = 10;
 
 export function distributeRooms(count: number, roomSize: RoomSize): number[] {
   if (count <= 0) return [];
@@ -16,10 +16,7 @@ export function distributeRooms(count: number, roomSize: RoomSize): number[] {
 
   const base = Math.floor(count / roomCount);
   const extra = count % roomCount;
-  return Array.from(
-    { length: roomCount },
-    (_, index) => base + (index < extra ? 1 : 0),
-  );
+  return Array.from({ length: roomCount }, (_, index) => base + (index < extra ? 1 : 0));
 }
 
 export function distributeRoomsWithBye(
@@ -27,10 +24,7 @@ export function distributeRoomsWithBye(
   roomSize: RoomSize,
   oddCountStrategy?: string,
 ): { rooms: number[]; byeCount: number } {
-  const remainder =
-    oddCountStrategy === "bye" && roomSize.min === roomSize.max
-      ? count % roomSize.ideal
-      : 0;
+  const remainder = oddCountStrategy === 'bye' && roomSize.min === roomSize.max ? count % roomSize.ideal : 0;
   return {
     rooms: distributeRooms(count - remainder, roomSize),
     byeCount: remainder,
@@ -38,7 +32,7 @@ export function distributeRoomsWithBye(
 }
 
 export function validateRoomCap(
-  rounds: Array<Pick<TournamentRound, "roundNum" | "rooms">>,
+  rounds: Array<Pick<TournamentRound, 'roundNum' | 'rooms'>>,
   format: Readonly<GameFormatDefinition>,
 ): string | null {
   const unitSize = format.teamSize ?? 1;
@@ -50,7 +44,7 @@ export function validateRoomCap(
           `Round ${round.roundNum} would seat ${playerCount} players in one room (` +
           `${roomUnits} ${format.unitLabelPlural.toLowerCase()} × ${unitSize} players each) — ` +
           `over the game's hard cap of ${HARD_ROOM_PLAYER_CAP} players per room. If you set a Semis/Final ` +
-          "size override, try a smaller value; otherwise this should not be possible with any registered " +
+          'size override, try a smaller value; otherwise this should not be possible with any registered ' +
           "format's current numbers — please report this before generating."
         );
       }

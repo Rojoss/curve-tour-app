@@ -1,30 +1,20 @@
-import {
-  createEmptyTournamentState,
-  createLegacySetupFixture,
-  getGameFormat,
-  type ActiveTab,
-  type IdSource,
-  type PersistedSetup,
-  type PersistedTournamentEnvelope,
-  type TournamentState,
-} from "../../domain/tournament";
+import { getGameFormat } from '../../domain/tournament/formats';
+import { createDefaultSetup, createDefaultTournamentState } from '../../domain/tournament/state-defaults';
+import type { IdSource } from '../../domain/tournament/runtime';
+import type {
+  ActiveTab,
+  PersistedSetup,
+  PersistedTournamentEnvelope,
+  TournamentState,
+} from '../../domain/tournament/types';
 
-const ACTIVE_TABS: readonly ActiveTab[] = [
-  "admin",
-  "scoreboard",
-  "bracket",
-  "rankings",
-  "archive",
-];
+const ACTIVE_TABS: readonly ActiveTab[] = ['admin', 'scoreboard', 'bracket', 'rankings', 'archive'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function normalizeTeamCollection(
-  value: unknown,
-  teamSize: number,
-): unknown {
+function normalizeTeamCollection(value: unknown, teamSize: number): unknown {
   if (!Array.isArray(value)) return value;
   return value.map((entry) => {
     if (!isRecord(entry)) return entry;
@@ -40,23 +30,20 @@ function normalizeTeamCollection(
  */
 export function normalizeLiveTournamentState(
   value: unknown,
-  ids: Pick<IdSource, "tournamentId">,
+  ids: Pick<IdSource, 'tournamentId'>,
 ): TournamentState {
   const raw = isRecord(value) ? value : {};
   const merged = {
-    ...createEmptyTournamentState(),
+    ...createDefaultTournamentState(),
     ...raw,
   } as unknown as TournamentState & Record<string, unknown>;
   const format = getGameFormat(merged.gameFormat);
   if (format?.teamSize) {
-    merged.players = normalizeTeamCollection(
-      merged.players,
-      format.teamSize,
-    ) as TournamentState["players"];
+    merged.players = normalizeTeamCollection(merged.players, format.teamSize) as TournamentState['players'];
     merged.reserves = normalizeTeamCollection(
       merged.reserves,
       format.teamSize,
-    ) as TournamentState["reserves"];
+    ) as TournamentState['reserves'];
   }
   if (Array.isArray(merged.rounds) && merged.rounds.length && !merged.tournamentId) {
     merged.tournamentId = ids.tournamentId();
@@ -66,39 +53,34 @@ export function normalizeLiveTournamentState(
 
 export function normalizePersistedSetup(value: unknown): PersistedSetup {
   const raw = isRecord(value) ? value : {};
-  const setup = createLegacySetupFixture();
+  const setup = createDefaultSetup();
   for (const key of Object.keys(setup) as (keyof PersistedSetup)[]) {
-    if (key !== "poolingPhase" && raw[key] !== undefined) {
+    if (key !== 'poolingPhase' && raw[key] !== undefined) {
       // Each known control is restored independently by legacy loadState().
       (setup as unknown as Record<string, unknown>)[key] = raw[key];
     }
   }
   const fallbackPoolingPhase =
-    raw.poolingPhase !== undefined
-      ? raw.poolingPhase
-      : raw.qual === "yes"
-        ? "qual-table"
-        : "none";
+    raw.poolingPhase !== undefined ? raw.poolingPhase : raw.qual === 'yes' ? 'qual-table' : 'none';
   // setup is reconstructed from controls on every legacy save. Deliberately
   // omit cfg-lb-qualifiers until a future protocol version is chosen.
-  setup.poolingPhase = fallbackPoolingPhase as PersistedSetup["poolingPhase"];
+  setup.poolingPhase = fallbackPoolingPhase as PersistedSetup['poolingPhase'];
   return setup;
 }
 
 export function normalizeActiveTab(value: unknown): ActiveTab {
-  return typeof value === "string" &&
-    (ACTIVE_TABS as readonly string[]).includes(value)
+  return typeof value === 'string' && (ACTIVE_TABS as readonly string[]).includes(value)
     ? (value as ActiveTab)
-    : "bracket";
+    : 'bracket';
 }
 
 export function parseLiveEnvelope(
   rawJson: string,
-  ids: Pick<IdSource, "tournamentId">,
+  ids: Pick<IdSource, 'tournamentId'>,
 ): PersistedTournamentEnvelope {
   const parsed: unknown = JSON.parse(rawJson);
   if (!isRecord(parsed)) {
-    throw new TypeError("Saved tournament envelope must be an object.");
+    throw new TypeError('Saved tournament envelope must be an object.');
   }
   return {
     T: normalizeLiveTournamentState(parsed.T, ids),
@@ -107,8 +89,6 @@ export function parseLiveEnvelope(
   };
 }
 
-export function serializeLiveEnvelope(
-  envelope: PersistedTournamentEnvelope,
-): string {
+export function serializeLiveEnvelope(envelope: PersistedTournamentEnvelope): string {
   return JSON.stringify(envelope);
 }

@@ -1,22 +1,30 @@
-import { lastAssignedRound } from "./rankings";
-import type { TournamentState } from "./types";
+import { lastAssignedRound } from './rankings';
+import type { TournamentState } from './types';
 
-export interface BracketRoundLabel {
+interface BracketRoundLabel {
   label: string;
-  accent: "" | "wb" | "lb" | "gf";
+  accent: '' | 'wb' | 'lb' | 'gf';
 }
 
-export function bracketRoundLabels(
-  state: Pick<TournamentState, "rounds">,
-): BracketRoundLabel[] {
+export function bracketRoundLabels(state: Pick<TournamentState, 'rounds'>): BracketRoundLabel[] {
   let winnersRound = 0;
   let losersRound = 0;
   return state.rounds.map((round) => {
-    if (round.bracket === "winners") return { label: `WB Round ${++winnersRound}`, accent: "wb" };
-    if (round.bracket === "losers") return { label: `LB Round ${++losersRound}`, accent: "lb" };
-    if (round.bracket === "grand-final") return { label: "🏆 Grand Final", accent: "gf" };
-    const label = round.isFinal ? "🏆 Final" : round.isSemis ? "⚔ Semis" : round.isQual ? `Round ${round.roundNum} (Qual)` : round.isSwiss ? `Round ${round.roundNum} (Swiss)` : round.isGroupStage ? `Round ${round.roundNum} (Group)` : `Round ${round.roundNum}`;
-    return { label, accent: "" };
+    if (round.bracket === 'winners') return { label: `WB Round ${++winnersRound}`, accent: 'wb' };
+    if (round.bracket === 'losers') return { label: `LB Round ${++losersRound}`, accent: 'lb' };
+    if (round.bracket === 'grand-final') return { label: '🏆 Grand Final', accent: 'gf' };
+    const label = round.isFinal
+      ? '🏆 Final'
+      : round.isSemis
+        ? '⚔ Semis'
+        : round.isQual
+          ? `Round ${round.roundNum} (Qual)`
+          : round.isSwiss
+            ? `Round ${round.roundNum} (Swiss)`
+            : round.isGroupStage
+              ? `Round ${round.roundNum} (Group)`
+              : `Round ${round.roundNum}`;
+    return { label, accent: '' };
   });
 }
 
@@ -30,11 +38,11 @@ export interface BracketFollowStatus {
 }
 
 export function bracketFollowStatus(
-  state: Pick<TournamentState, "assignments" | "byes">,
+  state: Pick<TournamentState, 'assignments' | 'byes'>,
   key: string | null,
 ): BracketFollowStatus | null {
   if (!key) return null;
-  const rounds: BracketFollowStatus["rounds"] = {};
+  const rounds: BracketFollowStatus['rounds'] = {};
   let lastRi = -1;
   let room: number | null = null;
   let isBye = false;

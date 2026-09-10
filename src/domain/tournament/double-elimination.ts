@@ -1,12 +1,8 @@
-import { distributeRooms, distributeRoomsWithBye } from "./room-distribution";
-import {
-  computeCleanTargets,
-  computeEliminationRoundCount,
-  computeTargets,
-} from "./single-elimination";
-import type { OddCountStrategyKey, RoomSize, TournamentRound } from "./types";
+import { distributeRooms, distributeRoomsWithBye } from './room-distribution';
+import { computeCleanTargets, computeEliminationRoundCount, computeTargets } from './single-elimination';
+import type { OddCountStrategyKey, RoomSize, TournamentRound } from './types';
 
-export interface BracketPowerShape {
+interface BracketPowerShape {
   bracketSize: number;
   numRounds: number;
 }
@@ -16,8 +12,7 @@ export interface RaceDoubleEliminationConfig {
   oddCountStrategy?: OddCountStrategyKey;
 }
 
-export interface SharedFinalDoubleEliminationConfig
-  extends RaceDoubleEliminationConfig {
+export interface SharedFinalDoubleEliminationConfig extends RaceDoubleEliminationConfig {
   finalSize: number;
   lbQualifiers: number;
   finalsGames: number;
@@ -33,7 +28,7 @@ export function nextPowerOf2AndRounds(count: number): BracketPowerShape {
   return { bracketSize, numRounds };
 }
 
-export function concentratedByeFirstRound(
+function concentratedByeFirstRound(
   total: number,
   shape: BracketPowerShape,
   roomSize: RoomSize,
@@ -52,11 +47,17 @@ interface RaceBracketProjection {
   advTotal: number;
 }
 
-type RaceSequenceEntry =
-  | { type: "wb"; wbIndex: number }
-  | { type: "lb"; lbIndex: number }
-  | { type: "gf" };
+type RaceSequenceEntry = { type: 'wb'; wbIndex: number } | { type: 'lb'; lbIndex: number } | { type: 'gf' };
 
+function findNextPosition<T>(sequence: readonly T[], after: number, matches: (entry: T) => boolean): number {
+  return sequence.findIndex((entry, position) => position > after && matches(entry));
+}
+
+function toRoundIndex(startRoundNum: number, sequencePosition: number | null): number | null {
+  return sequencePosition === null || sequencePosition === -1 ? null : startRoundNum - 1 + sequencePosition;
+}
+
+/** Builds a head-to-head double-elimination bracket with a grand final. */
 export function raceDoubleEliminationBracketPhase(
   seedTotal: number,
   startRoundNum: number,
@@ -67,7 +68,7 @@ export function raceDoubleEliminationBracketPhase(
       `doubleEliminationBracketPhase requires a head-to-head room shape (roomSize.ideal === 2) — got ${config.roomSize.ideal}.`,
     );
   }
-  if (config.oddCountStrategy === "flex") {
+  if (config.oddCountStrategy === 'flex') {
     throw new Error(
       'doubleEliminationBracketPhase does not support the "flex" odd-count strategy — a 3-unit room is not double elimination. Use "none" or "bye" instead.',
     );
@@ -87,11 +88,7 @@ export function raceDoubleEliminationBracketPhase(
     const distribution =
       index === 0
         ? concentratedByeFirstRound(total, shape, config.roomSize)
-        : distributeRoomsWithBye(
-            total,
-            config.roomSize,
-            config.oddCountStrategy,
-          );
+        : distributeRoomsWithBye(total, config.roomSize, config.oddCountStrategy);
     const advTotal = distribution.rooms.length + distribution.byeCount;
     winners.push({ ...distribution, players: total, advTotal });
     total = advTotal;
@@ -105,11 +102,7 @@ export function raceDoubleEliminationBracketPhase(
   for (let index = 0; index < winnersRoundCount; index += 1) {
     const dropCount = winners[index].rooms.length;
     if (index === 0) {
-      const drop = distributeRoomsWithBye(
-        dropCount,
-        config.roomSize,
-        config.oddCountStrategy,
-      );
+      const drop = distributeRoomsWithBye(dropCount, config.roomSize, config.oddCountStrategy);
       losers.push(drop);
       losersSurvivors = drop.rooms.length + drop.byeCount;
     } else if (index < winnersRoundCount - 1) {
@@ -120,20 +113,12 @@ export function raceDoubleEliminationBracketPhase(
       );
       losers.push(absorb);
       const absorbSurvivors = absorb.rooms.length + absorb.byeCount;
-      const survive = distributeRoomsWithBye(
-        absorbSurvivors,
-        config.roomSize,
-        config.oddCountStrategy,
-      );
+      const survive = distributeRoomsWithBye(absorbSurvivors, config.roomSize, config.oddCountStrategy);
       losers.push(survive);
       losersSurvivors = survive.rooms.length + survive.byeCount;
     } else {
       losers.push(
-        distributeRoomsWithBye(
-          losersSurvivors + dropCount,
-          config.roomSize,
-          config.oddCountStrategy,
-        ),
+        distributeRoomsWithBye(losersSurvivors + dropCount, config.roomSize, config.oddCountStrategy),
       );
     }
   }
@@ -141,32 +126,19 @@ export function raceDoubleEliminationBracketPhase(
   const sequence: RaceSequenceEntry[] = [];
   let losersIndex = 0;
   for (let index = 0; index < winnersRoundCount; index += 1) {
-    sequence.push({ type: "wb", wbIndex: index });
-    const count =
-      index === 0 || index === winnersRoundCount - 1 ? 1 : 2;
+    sequence.push({ type: 'wb', wbIndex: index });
+    const count = index === 0 || index === winnersRoundCount - 1 ? 1 : 2;
     for (let offset = 0; offset < count; offset += 1) {
-      sequence.push({ type: "lb", lbIndex: losersIndex });
+      sequence.push({ type: 'lb', lbIndex: losersIndex });
       losersIndex += 1;
     }
   }
-  sequence.push({ type: "gf" });
+  sequence.push({ type: 'gf' });
 
   const grandFinalPosition = sequence.length - 1;
-  const baseIndex = startRoundNum - 1;
-  const nextPosition = (
-    after: number,
-    predicate: (entry: RaceSequenceEntry) => boolean,
-  ): number => {
-    for (let position = after + 1; position < sequence.length; position += 1) {
-      if (predicate(sequence[position])) return position;
-    }
-    return -1;
-  };
-  const globalRoute = (position: number | null): number | null =>
-    position === null || position === -1 ? null : baseIndex + position;
 
   return sequence.map((entry, position): TournamentRound => {
-    if (entry.type === "gf") {
+    if (entry.type === 'gf') {
       return {
         roundNum: startRoundNum + position,
         players: 2,
@@ -179,30 +151,27 @@ export function raceDoubleEliminationBracketPhase(
         advPerRoom: 1,
         advTotal: 1,
         luckyCount: 0,
-        bracket: "grand-final",
+        bracket: 'grand-final',
         winnersTo: null,
         losersTo: null,
         numGames: 1,
       };
     }
 
-    const isWinners = entry.type === "wb";
+    const isWinners = entry.type === 'wb';
     const source: RaceBracketProjection = isWinners
       ? winners[entry.wbIndex]
       : {
           ...losers[entry.lbIndex],
           players:
-            losers[entry.lbIndex].rooms.reduce((sum, room) => sum + room, 0) +
-            losers[entry.lbIndex].byeCount,
-          advTotal:
-            losers[entry.lbIndex].rooms.length +
-            losers[entry.lbIndex].byeCount,
+            losers[entry.lbIndex].rooms.reduce((sum, room) => sum + room, 0) + losers[entry.lbIndex].byeCount,
+          advTotal: losers[entry.lbIndex].rooms.length + losers[entry.lbIndex].byeCount,
         };
     const winnersToPosition = isWinners
       ? entry.wbIndex === winnersRoundCount - 1
         ? grandFinalPosition
-        : nextPosition(position, (candidate) => candidate.type === "wb")
-      : nextPosition(position, (candidate) => candidate.type !== "wb");
+        : findNextPosition(sequence, position, (candidate) => candidate.type === 'wb')
+      : findNextPosition(sequence, position, (candidate) => candidate.type !== 'wb');
     const losersToPosition = isWinners ? position + 1 : null;
     return {
       roundNum: startRoundNum + position,
@@ -216,12 +185,10 @@ export function raceDoubleEliminationBracketPhase(
       advPerRoom: 1,
       advTotal: source.rooms.length + source.byeCount,
       luckyCount: 0,
-      bracket: isWinners ? "winners" : "losers",
-      winnersTo: globalRoute(winnersToPosition),
-      losersTo: globalRoute(losersToPosition),
-      ...(isWinners && entry.wbIndex === 0
-        ? { bracketPhaseFirstRound: true }
-        : {}),
+      bracket: isWinners ? 'winners' : 'losers',
+      winnersTo: toRoundIndex(startRoundNum, winnersToPosition),
+      losersTo: toRoundIndex(startRoundNum, losersToPosition),
+      ...(isWinners && entry.wbIndex === 0 ? { bracketPhaseFirstRound: true } : {}),
     };
   });
 }
@@ -236,10 +203,9 @@ interface SharedBracketProjection {
 }
 
 type SharedSequenceEntry =
-  | { type: "wb"; wbIndex: number }
-  | { type: "lb"; lbIndex: number }
-  | { type: "final" };
+  { type: 'wb'; wbIndex: number } | { type: 'lb'; lbIndex: number } | { type: 'final' };
 
+/** Builds a multi-unit bracket where the winners and losers brackets feed one shared final. */
 export function sharedFinalDoubleEliminationBracketPhase(
   seedTotal: number,
   startRoundNum: number,
@@ -252,31 +218,18 @@ export function sharedFinalDoubleEliminationBracketPhase(
     );
   }
 
-  const requestedRounds = computeEliminationRoundCount(
-    seedTotal,
-    winnersQualifiers,
-    config.roomSize,
-  );
+  const requestedRounds = computeEliminationRoundCount(seedTotal, winnersQualifiers, config.roomSize);
   if (requestedRounds < 1) {
     throw new Error(
       `doubleEliminationSharedFinalBracketPhase requires at least 1 winners-bracket round — got seedTotal ${seedTotal}, wbQualifiers ${winnersQualifiers}.`,
     );
   }
 
-  const winnersTargets = computeCleanTargets(
-    seedTotal,
-    winnersQualifiers,
-    requestedRounds,
-    config.roomSize,
-  );
+  const winnersTargets = computeCleanTargets(seedTotal, winnersQualifiers, requestedRounds, config.roomSize);
   const winners: Array<SharedBracketProjection & { dropCount: number }> = [];
   for (const [index, target] of winnersTargets.entries()) {
     const players = index === 0 ? seedTotal : winnersTargets[index - 1];
-    const distribution = distributeRoomsWithBye(
-      players,
-      config.roomSize,
-      config.oddCountStrategy,
-    );
+    const distribution = distributeRoomsWithBye(players, config.roomSize, config.oddCountStrategy);
     const roomAdvanceTarget = target - distribution.byeCount;
     winners.push({
       ...distribution,
@@ -306,20 +259,11 @@ export function sharedFinalDoubleEliminationBracketPhase(
       continue;
     }
     const roundsLeft = winners.length - winnersIndex;
-    const rawTargets = computeTargets(
-      players,
-      config.lbQualifiers,
-      roundsLeft,
-      config.roomSize,
-    );
+    const rawTargets = computeTargets(players, config.lbQualifiers, roundsLeft, config.roomSize);
     const survivorTarget = Math.min(rawTargets[0], players);
     if (survivorTarget === players) continue;
 
-    const distribution = distributeRoomsWithBye(
-      players,
-      config.roomSize,
-      config.oddCountStrategy,
-    );
+    const distribution = distributeRoomsWithBye(players, config.roomSize, config.oddCountStrategy);
     const roomAdvanceTarget = survivorTarget - distribution.byeCount;
     losers.push({
       ...distribution,
@@ -346,39 +290,24 @@ export function sharedFinalDoubleEliminationBracketPhase(
 
   const sequence: SharedSequenceEntry[] = [];
   for (let winnersIndex = 0; winnersIndex < winners.length; winnersIndex += 1) {
-    sequence.push({ type: "wb", wbIndex: winnersIndex });
+    sequence.push({ type: 'wb', wbIndex: winnersIndex });
     for (const [losersIndex, round] of losers.entries()) {
       if (round.afterWbIndex === winnersIndex) {
-        sequence.push({ type: "lb", lbIndex: losersIndex });
+        sequence.push({ type: 'lb', lbIndex: losersIndex });
       }
     }
   }
-  sequence.push({ type: "final" });
+  sequence.push({ type: 'final' });
 
   const finalPosition = sequence.length - 1;
-  const baseIndex = startRoundNum - 1;
-  const nextPosition = (
-    after: number,
-    predicate: (entry: SharedSequenceEntry) => boolean,
-  ): number => {
-    for (let position = after + 1; position < sequence.length; position += 1) {
-      if (predicate(sequence[position])) return position;
-    }
-    return -1;
-  };
   const losersSequencePosition = (winnersIndex: number): number | null => {
     const destination = losersDestinationByWinnersRound[winnersIndex];
     if (destination === null) return null;
-    const position = sequence.findIndex(
-      (entry) => entry.type === "lb" && entry.lbIndex === destination,
-    );
+    const position = sequence.findIndex((entry) => entry.type === 'lb' && entry.lbIndex === destination);
     return position === -1 ? null : position;
   };
-  const globalRoute = (position: number | null): number | null =>
-    position === null || position === -1 ? null : baseIndex + position;
-
   return sequence.map((entry, position): TournamentRound => {
-    if (entry.type === "final") {
+    if (entry.type === 'final') {
       return {
         roundNum: startRoundNum + position,
         players: config.finalSize,
@@ -397,23 +326,19 @@ export function sharedFinalDoubleEliminationBracketPhase(
       };
     }
 
-    const isWinners = entry.type === "wb";
-    const source = isWinners
-      ? winners[entry.wbIndex]
-      : losers[entry.lbIndex];
+    const isWinners = entry.type === 'wb';
+    const source = isWinners ? winners[entry.wbIndex] : losers[entry.lbIndex];
     const nextLosersOrFinal = isWinners
       ? null
-      : nextPosition(position, (candidate) => candidate.type !== "wb");
+      : findNextPosition(sequence, position, (candidate) => candidate.type !== 'wb');
     const winnersTo = isWinners
       ? entry.wbIndex === winners.length - 1
         ? finalPosition
-        : nextPosition(position, (candidate) => candidate.type === "wb")
+        : findNextPosition(sequence, position, (candidate) => candidate.type === 'wb')
       : nextLosersOrFinal === -1
         ? finalPosition
         : nextLosersOrFinal;
-    const losersTo = isWinners
-      ? losersSequencePosition(entry.wbIndex)
-      : null;
+    const losersTo = isWinners ? losersSequencePosition(entry.wbIndex) : null;
     return {
       roundNum: startRoundNum + position,
       players: source.players,
@@ -426,9 +351,9 @@ export function sharedFinalDoubleEliminationBracketPhase(
       advPerRoom: source.advPerRoom,
       advTotal: source.advTotal,
       luckyCount: source.luckyCount,
-      bracket: isWinners ? "winners" : "losers",
-      winnersTo: globalRoute(winnersTo),
-      losersTo: globalRoute(losersTo),
+      bracket: isWinners ? 'winners' : 'losers',
+      winnersTo: toRoundIndex(startRoundNum, winnersTo),
+      losersTo: toRoundIndex(startRoundNum, losersTo),
     };
   });
 }

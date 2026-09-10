@@ -1,8 +1,8 @@
-import { distributeRooms, distributeRoomsWithBye } from "./room-distribution";
-import type { OddCountStrategyKey, RoomSize, TournamentRound } from "./types";
+import { distributeRooms, distributeRoomsWithBye } from './room-distribution';
+import type { OddCountStrategyKey, RoomSize, TournamentRound } from './types';
 
-export const TARGET_ROUND_SURVIVAL_RATIO = 0.8;
-export const MAX_ELIMINATION_ROUNDS = 8;
+const TARGET_ROUND_SURVIVAL_RATIO = 0.8;
+const MAX_ELIMINATION_ROUNDS = 8;
 
 export interface SingleEliminationConfig {
   roomSize: RoomSize;
@@ -13,7 +13,7 @@ export interface SingleEliminationConfig {
   finalsGames: number;
 }
 
-export function snapFriendly(count: number, roomSize: RoomSize): number {
+function snapFriendly(count: number, roomSize: RoomSize): number {
   for (let distance = 0; distance <= roomSize.min; distance += 1) {
     for (const direction of [1, -1]) {
       const candidate = count + direction * distance;
@@ -27,12 +27,7 @@ export function snapFriendly(count: number, roomSize: RoomSize): number {
   return count;
 }
 
-export function computeTargets(
-  start: number,
-  end: number,
-  numRounds: number,
-  roomSize: RoomSize,
-): number[] {
+export function computeTargets(start: number, end: number, numRounds: number, roomSize: RoomSize): number[] {
   if (numRounds <= 0) return [];
   if (numRounds === 1) return [end];
   if (start <= end) return Array.from({ length: numRounds }, () => end);
@@ -45,10 +40,7 @@ export function computeTargets(
     if (index === numRounds) {
       target = end;
     } else {
-      target = snapFriendly(
-        Math.round(start * Math.pow(ratio, index)),
-        roomSize,
-      );
+      target = snapFriendly(Math.round(start * Math.pow(ratio, index)), roomSize);
       target = Math.min(target, previous);
       target = Math.max(target, end);
     }
@@ -58,14 +50,9 @@ export function computeTargets(
   return targets;
 }
 
-export function computeEliminationRoundCount(
-  total: number,
-  floor: number,
-  roomSize: RoomSize,
-): number {
+export function computeEliminationRoundCount(total: number, floor: number, roomSize: RoomSize): number {
   if (total <= floor) return 0;
-  const ideal =
-    Math.log(floor / total) / Math.log(TARGET_ROUND_SURVIVAL_RATIO);
+  const ideal = Math.log(floor / total) / Math.log(TARGET_ROUND_SURVIVAL_RATIO);
   let rounds = Math.min(Math.ceil(ideal), MAX_ELIMINATION_ROUNDS);
   if (roomSize.ideal === 2) {
     const halvingRounds = Math.ceil(Math.log(total / floor) / Math.log(2));
@@ -103,26 +90,13 @@ export function singleEliminationBracketPhase(
   startRoundNum: number,
   config: SingleEliminationConfig,
 ): TournamentRound[] {
-  const requestedRounds = computeEliminationRoundCount(
-    seedTotal,
-    config.semisSize,
-    config.roomSize,
-  );
-  const targets = computeCleanTargets(
-    seedTotal,
-    config.semisSize,
-    requestedRounds,
-    config.roomSize,
-  );
+  const requestedRounds = computeEliminationRoundCount(seedTotal, config.semisSize, config.roomSize);
+  const targets = computeCleanTargets(seedTotal, config.semisSize, requestedRounds, config.roomSize);
   const rounds: TournamentRound[] = [];
 
   for (const [index, target] of targets.entries()) {
     const players = index === 0 ? seedTotal : targets[index - 1];
-    const distribution = distributeRoomsWithBye(
-      players,
-      config.roomSize,
-      config.oddCountStrategy,
-    );
+    const distribution = distributeRoomsWithBye(players, config.roomSize, config.oddCountStrategy);
     const roomAdvanceTarget = target - distribution.byeCount;
     rounds.push({
       roundNum: startRoundNum + index,

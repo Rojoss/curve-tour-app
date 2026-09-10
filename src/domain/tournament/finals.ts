@@ -1,7 +1,7 @@
-import { getFinalUnitScore } from "./scoring";
-import type { TournamentRound, TournamentState } from "./types";
+import { getFinalUnitScore } from './scoring';
+import type { TournamentRound, TournamentState } from './types';
 
-export interface GrandFinalRaceState {
+interface GrandFinalRaceState {
   wbName: string;
   lbName: string;
   wbWins: number;
@@ -13,14 +13,14 @@ export interface GrandFinalRaceState {
   winnerName: string | null;
 }
 
-export interface FinalsUnitProgress {
+interface FinalsUnitProgress {
   name: string;
   perGame: Array<number | null>;
   total: number;
   wins: number;
 }
 
-export interface FinalsProgressState {
+interface FinalsProgressState {
   isGrandFinal: boolean;
   numGames: number;
   units: FinalsUnitProgress[];
@@ -39,10 +39,7 @@ export function computeGrandFinalRaceState(
   const assignments = state.assignments[roundIndex] ?? [];
   if (assignments.length !== 2 || round.wbFinalistName == null) return null;
   const wbName = round.wbFinalistName;
-  const lbName =
-    assignments[0].name === wbName
-      ? assignments[1].name
-      : assignments[0].name;
+  const lbName = assignments[0].name === wbName ? assignments[1].name : assignments[0].name;
   const wbTarget = state.gamemodeConfig.grandFinalWbTarget || 2;
   const lbTarget = state.gamemodeConfig.grandFinalLbTarget || 3;
   let wbWins = 0;
@@ -78,21 +75,7 @@ export function computeGrandFinalRaceState(
   };
 }
 
-export function shouldOpenNextGrandFinalGame(
-  state: TournamentState,
-  roundIndex: number,
-  round: TournamentRound,
-): boolean {
-  if (round.bracket !== "grand-final") return false;
-  const race = computeGrandFinalRaceState(state, roundIndex, round);
-  return Boolean(
-    race &&
-      !race.decided &&
-      race.gamesPlayed === (round.numGames ?? 0),
-  );
-}
-
-export interface GrandFinalRaceTransition {
+interface GrandFinalRaceTransition {
   state: TournamentState;
   /** Matches legacy checkGrandFinalRace(): skip auto-archive while true. */
   inProgress: boolean;
@@ -100,12 +83,10 @@ export interface GrandFinalRaceTransition {
 }
 
 /** Pure state transition counterpart of legacy checkGrandFinalRace(). */
-export function progressGrandFinalRace(
-  state: TournamentState,
-): GrandFinalRaceTransition {
+export function progressGrandFinalRace(state: TournamentState): GrandFinalRaceTransition {
   const roundIndex = state.curRound;
   const round = state.rounds[roundIndex];
-  if (!round || round.bracket !== "grand-final") {
+  if (!round || round.bracket !== 'grand-final') {
     return { state, inProgress: false, openedNextGame: false };
   }
   const race = computeGrandFinalRaceState(state, roundIndex, round);
@@ -116,9 +97,7 @@ export function progressGrandFinalRace(
     return { state, inProgress: true, openedNextGame: false };
   }
   const rounds = state.rounds.map((entry, index) =>
-    index === roundIndex
-      ? { ...entry, numGames: (entry.numGames ?? 0) + 1 }
-      : entry,
+    index === roundIndex ? { ...entry, numGames: (entry.numGames ?? 0) + 1 } : entry,
   );
   return {
     state: { ...state, rounds },
@@ -134,10 +113,7 @@ export function finalsProgressState(
 ): FinalsProgressState {
   const assignments = state.assignments[roundIndex] ?? [];
   const numGames = round.numGames ?? 0;
-  const race =
-    round.bracket === "grand-final"
-      ? computeGrandFinalRaceState(state, roundIndex, round)
-      : null;
+  const race = round.bracket === 'grand-final' ? computeGrandFinalRaceState(state, roundIndex, round) : null;
   const units = assignments.map((assignment): FinalsUnitProgress => {
     const perGame = Array.from({ length: numGames }, (_, index) =>
       getFinalUnitScore(state, assignment.name, index + 1, null),
@@ -149,26 +125,22 @@ export function finalsProgressState(
     if (race) {
       for (let game = 1; game <= race.gamesPlayed; game += 1) {
         const mine = getFinalUnitScore(state, assignment.name, game, null);
-        const otherName =
-          assignment.name === race.wbName ? race.lbName : race.wbName;
+        const otherName = assignment.name === race.wbName ? race.lbName : race.wbName;
         const other = getFinalUnitScore(state, otherName, game, null);
         if (mine !== null && other !== null && mine > other) wins += 1;
       }
     }
     return { name: assignment.name, perGame, total, wins };
   });
-  const gameComplete = Array.from({ length: numGames }, (_, index) =>
-    assignments.length > 0 &&
-    assignments.every(
-      (assignment) =>
-        getFinalUnitScore(state, assignment.name, index + 1, null) !== null,
-    ),
+  const gameComplete = Array.from(
+    { length: numGames },
+    (_, index) =>
+      assignments.length > 0 &&
+      assignments.every((assignment) => getFinalUnitScore(state, assignment.name, index + 1, null) !== null),
   );
   const complete = race
     ? race.decided
-    : assignments.length > 0 &&
-      gameComplete.length > 0 &&
-      gameComplete.every(Boolean);
+    : assignments.length > 0 && gameComplete.length > 0 && gameComplete.every(Boolean);
   const incompleteGame = gameComplete.findIndex((value) => !value);
   const nextGame = !complete && incompleteGame >= 0 ? incompleteGame + 1 : null;
   let order: Array<string | null>;
@@ -176,9 +148,7 @@ export function finalsProgressState(
     const loser = race.winnerName === race.wbName ? race.lbName : race.wbName;
     order = [race.winnerName, loser];
   } else if (complete) {
-    order = [...units]
-      .sort((first, second) => second.total - first.total)
-      .map((unit) => unit.name);
+    order = [...units].sort((first, second) => second.total - first.total).map((unit) => unit.name);
   } else {
     order = assignments.map((assignment) => assignment.name);
   }

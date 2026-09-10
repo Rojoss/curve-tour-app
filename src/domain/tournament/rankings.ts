@@ -1,11 +1,7 @@
-import { computeGrandFinalRaceState } from "./finals";
-import { getFinalUnitScore, getUnitScore, orderRoomByScore } from "./scoring";
-import { rosterKeys, unitDisplay } from "./roster";
-import type {
-  RoundAssignment,
-  TournamentRound,
-  TournamentState,
-} from "./types";
+import { computeGrandFinalRaceState } from './finals';
+import { getFinalUnitScore, getUnitScore, orderRoomByScore } from './scoring';
+import { rosterKeys, unitDisplay } from './roster';
+import type { RoundAssignment, TournamentRound, TournamentState } from './types';
 
 export interface RankingDisplay {
   name: string;
@@ -13,25 +9,25 @@ export interface RankingDisplay {
   members: string[] | null;
 }
 
-export interface ActiveRanking extends RankingDisplay {
+interface ActiveRanking extends RankingDisplay {
   room: number | null;
   isLucky: boolean;
   poolRank: { rank: number; fp: number | null; groupLabel?: string } | null;
 }
 
-export interface FinalistRanking extends RankingDisplay {
+interface FinalistRanking extends RankingDisplay {
   total: number;
   rank: number;
 }
 
-export interface EliminatedRanking extends RankingDisplay {
+interface EliminatedRanking extends RankingDisplay {
   ri: number;
   round: TournamentRound;
   pct: number;
   rank: number;
 }
 
-export interface TournamentRankings {
+interface TournamentRankings {
   stillActive: ActiveRanking[];
   finalComplete: boolean;
   finalists: FinalistRanking[];
@@ -40,9 +36,7 @@ export interface TournamentRankings {
   lastRi: number;
 }
 
-export function lastAssignedRound(
-  state: Pick<TournamentState, "assignments">,
-): number {
+export function lastAssignedRound(state: Pick<TournamentState, 'assignments'>): number {
   let last = -1;
   for (const [index, assignments] of state.assignments.entries()) {
     if (assignments?.length) last = index;
@@ -59,17 +53,12 @@ function assignmentsByRoom(assignments: RoundAssignment[]) {
   return rooms;
 }
 
-export function computeRankings(
-  state: TournamentState,
-): TournamentRankings | null {
+export function computeRankings(state: TournamentState): TournamentRankings | null {
   if (!state.rounds.length || !state.assignments.length) return null;
   const lastRi = lastAssignedRound(state);
   if (lastRi === -1) return null;
 
-  const eliminated = new Map<
-    string,
-    { ri: number; round: TournamentRound; pct: number }
-  >();
+  const eliminated = new Map<string, { ri: number; round: TournamentRound; pct: number }>();
   for (let roundIndex = 0; roundIndex < lastRi; roundIndex += 1) {
     const round = state.rounds[roundIndex];
     if (round.isFinal) continue;
@@ -77,15 +66,11 @@ export function computeRankings(
     if (round.bracket) {
       const winners =
         round.winnersTo !== null && round.winnersTo !== undefined
-          ? new Set(
-              (state.assignments[round.winnersTo] ?? []).map(({ name }) => name),
-            )
+          ? new Set((state.assignments[round.winnersTo] ?? []).map(({ name }) => name))
           : null;
       const losers =
         round.losersTo !== null && round.losersTo !== undefined
-          ? new Set(
-              (state.assignments[round.losersTo] ?? []).map(({ name }) => name),
-            )
+          ? new Set((state.assignments[round.losersTo] ?? []).map(({ name }) => name))
           : null;
       for (const [roomKey, roomAssignments] of byRoom) {
         const room = Number(roomKey);
@@ -110,9 +95,7 @@ export function computeRankings(
         }
       }
     } else {
-      const nextNames = new Set(
-        (state.assignments[roundIndex + 1] ?? []).map(({ name }) => name),
-      );
+      const nextNames = new Set((state.assignments[roundIndex + 1] ?? []).map(({ name }) => name));
       for (const [roomKey, roomAssignments] of byRoom) {
         const room = Number(roomKey);
         const scored = roomAssignments.map((assignment, position) => ({
@@ -138,7 +121,7 @@ export function computeRankings(
   let active: RoundAssignment[] = [];
   let finalistValues: Array<{ name: string; total: number }> = [];
   let finalComplete = false;
-  if (lastRound.isFinal && lastRound.bracket === "grand-final") {
+  if (lastRound.isFinal && lastRound.bracket === 'grand-final') {
     const race = computeGrandFinalRaceState(state, lastRi, lastRound);
     finalComplete = Boolean(race?.decided);
     if (race?.decided) {
@@ -146,13 +129,11 @@ export function computeRankings(
       finalistValues = [
         {
           name: race.winnerName as string,
-          total:
-            race.winnerName === race.wbName ? race.wbWins : race.lbWins,
+          total: race.winnerName === race.wbName ? race.wbWins : race.lbWins,
         },
         {
           name: loser,
-          total:
-            race.winnerName === race.wbName ? race.lbWins : race.wbWins,
+          total: race.winnerName === race.wbName ? race.lbWins : race.wbWins,
         },
       ];
     } else active = [...lastAssignments];
@@ -162,8 +143,7 @@ export function computeRankings(
       lastAssignments.length > 0 &&
       lastAssignments.every((assignment) =>
         Array.from({ length: games }, (_, index) => index + 1).every(
-          (game) =>
-            getFinalUnitScore(state, assignment.name, game, null) !== null,
+          (game) => getFinalUnitScore(state, assignment.name, game, null) !== null,
         ),
       );
     if (finalComplete) {
@@ -171,9 +151,7 @@ export function computeRankings(
         .map((assignment) => ({
           name: assignment.name,
           total: Array.from({ length: games }, (_, index) => index + 1).reduce(
-            (sum, game) =>
-              sum +
-              (getFinalUnitScore(state, assignment.name, game, 0) ?? 0),
+            (sum, game) => sum + (getFinalUnitScore(state, assignment.name, game, 0) ?? 0),
             0,
           ),
         }))
@@ -206,7 +184,7 @@ export function computeRankings(
   let finalRank = 0;
   let previousTotal: number | null = null;
   const rankedFinalists = finalistValues.map((entry, index) => {
-    if (lastRound.bracket === "grand-final") return { ...entry, rank: index + 1 };
+    if (lastRound.bracket === 'grand-final') return { ...entry, rank: index + 1 };
     if (entry.total !== previousTotal) {
       finalRank = index + 1;
       previousTotal = entry.total;
@@ -214,11 +192,8 @@ export function computeRankings(
     return { ...entry, rank: finalRank };
   });
 
-  const poolRanks = new Map<
-    string,
-    { rank: number; fp: number | null; groupLabel?: string }
-  >();
-  if (state.cfg.poolingPhase === "group-stage") {
+  const poolRanks = new Map<string, { rank: number; fp: number | null; groupLabel?: string }>();
+  if (state.cfg.poolingPhase === 'group-stage') {
     for (const [label, table] of Object.entries(state.groupStandings)) {
       table.forEach((entry, index) =>
         poolRanks.set(entry.name, {
@@ -228,7 +203,7 @@ export function computeRankings(
         }),
       );
     }
-  } else if (state.cfg.poolingPhase && state.cfg.poolingPhase !== "none") {
+  } else if (state.cfg.poolingPhase && state.cfg.poolingPhase !== 'none') {
     state.qualTable.forEach((entry, index) =>
       poolRanks.set(entry.name, { rank: index + 1, fp: entry.totalFP }),
     );
